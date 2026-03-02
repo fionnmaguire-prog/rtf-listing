@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#201235" />
+    <title>RTF Listing</title>
+  </head>
+
+  <body>
+    <div id="app">
+      <div class="layout">
+        <div class="stage">
+          <header class="topTabBar" aria-label="Page tabs">
+            <nav class="topTabNav" aria-label="Listing pages">
+              <button class="topTabBtn isActive" type="button" data-top-tab="tour">REAL TOUR</button>
+              <button class="topTabBtn" type="button" data-top-tab="gallery">Gallery</button>
+              <button class="topTabBtn" type="button" data-top-tab="info">Info</button>
+              <button class="topTabBtn" type="button" data-top-tab="videos">Videos</button>
+              <button class="topTabBtn" type="button" data-top-tab="floorplan">Floorplan</button>
+            </nav>
+            <div class="topTabMobilePicker">
+              <label class="topTabSelectWrap" for="topTabSelect">
+                <select id="topTabSelect" class="topTabSelect" aria-label="Select page tab">
+                  <option value="tour">REAL TOUR</option>
+                  <option value="gallery">GALLERY</option>
+                  <option value="info">INFO</option>
+                  <option value="videos">VIDEOS</option>
+                  <option value="floorplan">FLOORPLAN</option>
+                </select>
+                <span class="topTabSelectIcon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" focusable="false">
+                    <path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z" />
+                  </svg>
+                </span>
+              </label>
+            </div>
+            <div class="topTabActions">
+              <button
+                id="tourFullscreenToggle"
+                class="topTabUtilityBtn"
+                type="button"
+                aria-label="Enter player fullscreen"
+              >
+                Fullscreen
+              </button>
+            </div>
+          </header>
+          <div id="tourFrameViewport" class="tourFrameViewport playerEmbed">
+            <button
+              id="tourFullscreenExit"
+              class="tourFullscreenExit"
+              type="button"
+              aria-label="Exit player fullscreen"
+            >
+              ×
+            </button>
+            <iframe
+              id="tourFrame"
+              title="RTF Tour"
+              allow="autoplay; fullscreen"
+              referrerpolicy="no-referrer-when-downgrade"
+              scrolling="no"
+            ></iframe>
+          </div>
+          <section id="galleryExperienceView" class="galleryExperienceView" hidden>
+            <section class="galleryExperiencePanel" aria-label="Full page room gallery">
+              <div class="galleryExperienceLayout">
+                <div class="pageGalleryCanvas">
+                  <div id="galleryPageHint" class="galleryPageHint" aria-hidden="true" hidden>
+                    Click Images To Enlarge
+                  </div>
+                  <div id="galleryPageGrid" class="pageGalleryGrid"></div>
+                </div>
+                <aside class="pageGallerySidebar" aria-label="Gallery room list">
+                  <div id="galleryPageList" class="pageGalleryList"></div>
+                </aside>
+              </div>
+            </section>
+          </section>
+          <section id="infoExperienceView" class="infoExperienceView" hidden>
+            <section class="infoExperiencePanel" aria-label="Property information">
+              <div class="infoExperienceLayout">
+                <section class="infoBlurbWrap" aria-label="Property description">
+                  <div id="infoBlurbCard" class="infoBlurbCard">
+                    <section class="infoProperty">
+                      <div class="infoPropCard">
+                        <h1 id="infoPropTitle">Loading...</h1>
+                        <div id="infoPropSubAddress" class="infoPropSubTitle"></div>
+
+                        <div class="infoPropStats" aria-label="Property stats">
+                          <div class="infoStat">
+                            <span class="infoStatIcon" aria-hidden="true">&#x1F6CF;&#xFE0E;</span>
+                            <div class="infoStatText">
+                              <div class="infoStatValue" id="infoStatBeds">-</div>
+                              <div class="infoStatLabel">Beds</div>
+                            </div>
+                          </div>
+
+                          <div class="infoStat">
+                            <span class="infoStatIcon" aria-hidden="true">&#x1F6C1;&#xFE0E;</span>
+                            <div class="infoStatText">
+                              <div class="infoStatValue" id="infoStatBaths">-</div>
+                              <div class="infoStatLabel">Baths</div>
+                            </div>
+                          </div>
+
+                          <div class="infoStat">
+                            <span class="infoStatIcon" aria-hidden="true">&#x1F4D0;&#xFE0E;</span>
+                            <div class="infoStatText">
+                              <div class="infoStatValue" id="infoStatSqft">-</div>
+                              <div class="infoStatLabel">Sq Ft</div>
+                            </div>
+                          </div>
+                        </div>
+
+                      </div>
+                    </section>
+
+                    <div id="infoBlurbScroll" class="infoBlurbScroll">
+                      <div id="infoBlurbContent" class="infoBlurbContent"></div>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            </section>
+          </section>
+          <section id="videosExperienceView" class="videosExperienceView" hidden>
+            <section class="videosExperiencePanel" aria-label="Property videos">
+              <div class="videosExperienceLayout">
+                <section class="videosPlayerBlock" aria-label="Drone gallery video">
+                  <div class="videosTabHeader">
+                    <h2 id="videosTabTitle" class="videosTabTitle">Videos</h2>
+                    <div class="videoModeControl floorplanLevelControl">
+                      <div id="videosModeLabel" class="floorplanLevelLabel">360 Scrub</div>
+                      <div id="videosModeMenuWrap" class="floorplanLevelMenuWrap">
+                        <button
+                          id="videosModeMenuToggle"
+                          class="floorplanLevelMenuToggle"
+                          type="button"
+                          aria-label="Choose video mode"
+                          aria-expanded="false"
+                          aria-haspopup="menu"
+                        >
+                          <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z" />
+                          </svg>
+                        </button>
+                        <div id="videosModeMenu" class="floorplanLevelMenu" role="menu" hidden></div>
+                      </div>
+                    </div>
+                  </div>
+                  <div id="videosTabPlayer" class="videosTabPlayer"></div>
+                </section>
+              </div>
+            </section>
+          </section>
+          <section id="floorplanExperienceView" class="floorplanExperienceView" hidden>
+            <section class="floorplanExperiencePanel" aria-label="Property floorplan">
+              <div class="floorplanExperienceLayout">
+                <section class="floorplanTabBlock" aria-label="Interactive floorplan">
+                  <div class="floorplanTabHeader">
+                    <h2 class="floorplanTabTitle">Floorplan</h2>
+                    <div class="floorplanLevelControl">
+                      <div id="floorplanLevelLabel" class="floorplanLevelLabel">Downstairs</div>
+                      <div id="floorplanLevelMenuWrap" class="floorplanLevelMenuWrap">
+                        <button
+                          id="floorplanLevelMenuToggle"
+                          class="floorplanLevelMenuToggle"
+                          type="button"
+                          aria-label="Choose floor level"
+                          aria-expanded="false"
+                          aria-haspopup="menu"
+                        >
+                          <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z" />
+                          </svg>
+                        </button>
+                        <div id="floorplanLevelMenu" class="floorplanLevelMenu" role="menu" hidden></div>
+                      </div>
+                    </div>
+                  </div>
+                  <div id="floorplanTabMount" class="floorplanTabMount"></div>
+                </section>
+              </div>
+            </section>
+          </section>
+        </div>
+
+        <aside id="sidebar" class="sidebar" aria-label="Listing sidebar">
+          <div class="sidebarViewport">
+            <div class="sidebarTrack">
+              <!-- PAGE 1: Main info -->
+              <div class="sidebarPage" id="tabMain">
+                <header class="property">
+                  <div class="propCard">
+                    <h1 id="propTitle">Loading…</h1>
+                    <div id="propSubAddress" class="propSubTitle"></div>
+
+                    <div class="propStats" aria-label="Property stats">
+                      <div class="stat">
+                        <span class="statIcon" aria-hidden="true">🛏</span>
+                        <div class="statText">
+                          <div class="statValue" id="statBeds">–</div>
+                          <div class="statLabel">Beds</div>
+                        </div>
+                      </div>
+
+                      <div class="stat">
+                        <span class="statIcon" aria-hidden="true">🛁</span>
+                        <div class="statText">
+                          <div class="statValue" id="statBaths">–</div>
+                          <div class="statLabel">Baths</div>
+                        </div>
+                      </div>
+
+                      <div class="stat">
+                        <span class="statIcon" aria-hidden="true">📐</span>
+                        <div class="statText">
+                          <div class="statValue" id="statSqft">–</div>
+                          <div class="statLabel">Sq Ft</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <p id="propSummary"></p>
+
+                    <div id="propHoverBlurb" class="propHoverBlurb" aria-hidden="true"></div>
+                  </div>
+                </header>
+
+                <!-- PAGE 1 CONTENT: Gallery only -->
+                <div class="mainSections">
+                  <section class="panel galleryPanel">
+                    <div class="galleryTitleRow">
+                      <h2 class="panelTitle galleryOverlayTitle" id="galleryTitle">Gallery</h2>
+                      <div id="galleryMenuWrap" class="galleryMenuWrap">
+                        <button
+                          id="galleryMenuToggle"
+                          class="galleryMenuToggle"
+                          type="button"
+                          aria-label="Select gallery room"
+                          aria-expanded="false"
+                          aria-controls="galleryMenu"
+                        >
+                          <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path
+                              d="M12 15.6a1 1 0 0 1-.7-.3l-4.9-4.9a1 1 0 1 1 1.4-1.4l4.2 4.2 4.2-4.2a1 1 0 1 1 1.4 1.4l-4.9 4.9a1 1 0 0 1-.7.3z"
+                            />
+                          </svg>
+                        </button>
+                        <div id="galleryMenu" class="galleryMenu" role="menu" hidden></div>
+                      </div>
+                    </div>
+                    <div id="gallery" class="gallery"></div>
+                  </section>
+                </div>
+              </div>
+
+              <!-- PAGE 2: Videos + Floorplan -->
+              <div class="sidebarPage" id="tabDrone">
+                <header class="property">
+                  <div class="propCard">
+                    <h1>Videos</h1>
+                    <div class="propSubTitle">Exterior drone footage and highlights.</div>
+                  </div>
+                </header>
+
+                <!-- PAGE 2 CONTENT: Drone videos + Floorplan (equal space) -->
+                <div class="droneSections">
+                  <section class="panel dronePanel">
+                    <div class="dronePanelHeader">
+                      <h2 class="panelTitle dronePanelTitle">Videos</h2>
+                      <div class="videoModeControl floorplanLevelControl">
+                        <div id="sidebarVideosModeLabel" class="floorplanLevelLabel">360 Scrub</div>
+                        <div id="sidebarVideosModeMenuWrap" class="floorplanLevelMenuWrap">
+                          <button
+                            id="sidebarVideosModeMenuToggle"
+                            class="floorplanLevelMenuToggle"
+                            type="button"
+                            aria-label="Choose video mode"
+                            aria-expanded="false"
+                            aria-haspopup="menu"
+                          >
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                              <path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z" />
+                            </svg>
+                          </button>
+                          <div id="sidebarVideosModeMenu" class="floorplanLevelMenu" role="menu" hidden></div>
+                        </div>
+                      </div>
+                    </div>
+                    <div id="droneGrid" class="droneGrid"></div>
+                  </section>
+
+                  <section class="panel floorplanPanel">
+                    <div class="floorplanPanelHeader">
+                      <h2 class="panelTitle floorplanPanelTitle">Floor Plan</h2>
+                      <div class="videoModeControl floorplanLevelControl">
+                        <div id="sidebarFloorplanLevelLabel" class="floorplanLevelLabel">Downstairs</div>
+                        <div id="sidebarFloorplanLevelMenuWrap" class="floorplanLevelMenuWrap">
+                          <button
+                            id="sidebarFloorplanLevelMenuToggle"
+                            class="floorplanLevelMenuToggle"
+                            type="button"
+                            aria-label="Choose floor level"
+                            aria-expanded="false"
+                            aria-haspopup="menu"
+                          >
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                              <path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z" />
+                            </svg>
+                          </button>
+                          <div
+                            id="sidebarFloorplanLevelMenu"
+                            class="floorplanLevelMenu"
+                            role="menu"
+                            hidden
+                          ></div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div id="sidebarFloorplanFrame" class="floorplanFrame" aria-label="Interactive floor plan">
+                      <!-- ✅ Viewport that gets panned/zoomed via CSS transform -->
+                      <div id="floorplanViewport" class="floorplanViewport">
+                        <div id="floorplanContent" class="floorplanContent">
+                          <object
+                            id="floorplan"
+                            class="floorplanSvg"
+                            type="image/svg+xml"
+                            aria-label="Floor plan"
+                          ></object>
+                        </div>
+                      </div>
+
+                      <!-- ✅ Zoom UI (bottom-right) -->
+                      <div class="floorplanZoomUI" aria-label="Floorplan zoom controls">
+                        <button
+                          id="floorplanZoomOut"
+                          class="floorplanZoomBtn"
+                          type="button"
+                          aria-label="Zoom out"
+                        >
+                          –
+                        </button>
+
+                        <input
+                          id="floorplanZoom"
+                          class="floorplanZoomSlider"
+                          type="range"
+                          min="50"
+                          max="250"
+                          value="100"
+                          step="1"
+                          aria-label="Zoom level"
+                        />
+
+                        <span id="floorplanZoomValue" class="floorplanZoomValue" aria-live="polite">
+                          100%
+                        </span>
+
+                        <button
+                          id="floorplanZoomIn"
+                          class="floorplanZoomBtn"
+                          type="button"
+                          aria-label="Zoom in"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  </section>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Arrow buttons -->
+          <button
+            class="sidebarArrow sidebarArrowDown"
+            id="arrowDown"
+            type="button"
+            aria-label="More"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 9l6 6 6-6" />
+            </svg>
+          </button>
+
+          <button
+            class="sidebarArrow sidebarArrowRight sidebarArrowDown"
+            id="arrowDownRight"
+            type="button"
+            aria-label="More"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 9l6 6 6-6" />
+            </svg>
+          </button>
+
+          <button
+            class="sidebarArrow sidebarArrowUp"
+            id="arrowUp"
+            type="button"
+            aria-label="Back"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 15l6-6 6 6" />
+            </svg>
+          </button>
+
+          <button
+            class="sidebarArrow sidebarArrowRight sidebarArrowUp"
+            id="arrowUpRight"
+            type="button"
+            aria-label="Back"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 15l6-6 6 6" />
+            </svg>
+          </button>
+        </aside>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

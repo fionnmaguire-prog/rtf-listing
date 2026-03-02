@@ -1,0 +1,239 @@
+{
+  "id": "prod_demo_house_01",
+  "title": "123 Demo St",
+  "addressLine": "North Hollywood, CA, 91602",
+  "summary": "4 bedroom, 3 bathroom family home with generous living spaces.",
+  "hoverBlurb": {
+    "title": "Modern Elegance Meets Everyday Comfort",
+    "paragraphs": [
+      "Welcome to this beautifully designed 4-bedroom, 3-bathroom residence offering approximately 2,600 square feet of thoughtfully crafted living space. Blending contemporary architecture with warm, inviting finishes, this home delivers the perfect balance of style and functionality.",
+      "Step inside to an open-concept floor plan filled with natural light, soaring ceilings, and seamless indoor-outdoor flow. The chef-inspired kitchen features premium appliances, generous counter space, and an oversized island ideal for entertaining. The expansive primary suite offers a private retreat complete with a spa-like ensuite and walk-in closet.",
+      "Additional bedrooms provide flexibility for family, guests, or a dedicated office space, while multiple living areas ensure room to relax or host in comfort. Designed for modern living, this home is a showcase of quality craftsmanship and timeless design.",
+      "Experience the property through our fully immersive 3D and interactive tour to explore every detail at your own pace."
+    ]
+  },
+  "beds": 4,
+  "baths": 3,
+  "sqft": 2600,
+  "tourUrl": "https://realtour.rtfmediasolutions.com/?tour=prod_demo_house_01",
+
+  "nodeToRoomKey": {
+    "1": "living_room",
+    "2": "living_room",
+
+    "3": "guest_bath_down",
+    "4": "guest_bed_down",
+
+    "5": "kitchen",
+    "6": "kitchen",
+    "7": "kitchen",
+
+    "8": "laundry",
+    "9": "garage",
+
+    "10": "stairs",
+    "11": "landing",
+    "12": "landing",
+    "13": "landing",
+
+    "14": "master_bed",
+    "15": "master_wardrobe",
+    "16": "master_bath",
+
+    "17": "hall",
+
+    "18": "guest_bath_up",
+    "19": "guest_bed_up",
+    "20": "guest_bed_up",
+    "21": "guest_wardrobe"
+  },
+
+  "roomsByKey": {
+    "living_room": {
+      "label": "Living Room",
+      "gallery": [
+        "/listings/media/prod_demo_house_01/galleries/room_001_living_room/001.jpeg",
+        "/listings/media/prod_demo_house_01/galleries/room_001_living_room/002.jpeg",
+        "/listings/media/prod_demo_house_01/galleries/room_001_living_room/003.jpeg"
+      ]
+    },
+
+    "guest_bath_down": {
+      "label": "Guest Bathroom",
+      "gallery": [
+        "/listings/media/prod_demo_house_01/galleries/room_002_guestbath_room/001.jpeg",
+        "/listings/media/prod_demo_house_01/galleries/room_002_guestbath_room/002.jpeg",
+        "/listings/media/prod_demo_house_01/galleries/room_002_guestbath_room/003.jpeg"
+      ]
+    },
+
+    "guest_bed_down": {
+      "label": "Guest Bedroom",
+      "gallery": [
+        "/listings/media/prod_demo_house_01/galleries/room_003_guestbed_room/001.jpeg",
+        "/listings/media/prod_demo_house_01/galleries/room_003_guestbed_room/002.jpeg",
+        "/listings/media/prod_demo_house_01/galleries/room_003_guestbed_room/003.jpeg"
+      ]
+    },
+
+    "kitchen": {
+      "label": "Kitchen",
+      "gallery": [
+        "/listings/media/prod_demo_house_01/galleries/room_004_kitchen_room/001.jpeg",
+        "/listings/media/prod_demo_house_01/galleries/room_004_kitchen_room/002.jpeg",
+        "/listings/media/prod_demo_house_01/galleries/room_004_kitchen_room/003.jpeg"
+      ]
+    },
+
+    "laundry": {
+      "label": "Laundry",
+      "gallery": [
+        "/listings/media/prod_demo_house_01/galleries/room_005_laundry_room/001.jpeg",
+        "/listings/media/prod_demo_house_01/galleries/room_005_laundry_room/002.jpeg",
+        "/listings/media/prod_demo_house_01/galleries/room_005_laundry_room/003.jpeg"
+      ]
+    },
+
+    "garage": {
+      "label": "Garage",
+      "gallery": [
+        "/listings/media/prod_demo_house_01/galleries/room_006_garage_room/001.jpeg",
+        "/listings/media/prod_demo_house_01/galleries/room_006_garage_room/002.jpeg",
+        "/listings/media/prod_demo_house_01/galleries/room_006_garage_room/003.jpeg"
+      ]
+    },
+
+    "stairs": {
+      "label": "Stairs",
+      "gallery": []
+    },
+
+    "landing": {
+      "label": "Landing",
+      "gallery": []
+    },
+
+    "master_bed": {
+      "label": "Master Bedroom",
+      "gallery": [
+        "/listings/media/prod_demo_house_01/galleries/room_009_masterbed_room/001.jpeg",
+        "/listings/media/prod_demo_house_01/galleries/room_009_masterbed_room/002.jpeg",
+        "/listings/media/prod_demo_house_01/galleries/room_009_masterbed_room/003.jpeg"
+      ]
+    },
+
+    "master_wardrobe": {
+      "label": "Master Wardrobe",
+      "gallery": []
+    },
+
+    "master_bath": {
+      "label": "Master Bathroom",
+      "gallery": [
+        "/listings/media/prod_demo_house_01/galleries/room_010_masterbath_room/001.jpeg",
+        "/listings/media/prod_demo_house_01/galleries/room_010_masterbath_room/002.jpeg",
+        "/listings/media/prod_demo_house_01/galleries/room_010_masterbath_room/003.jpeg"
+      ]
+    },
+
+    "hall": {
+      "label": "Hall",
+      "gallery": []
+    },
+
+    "guest_bath_up": {
+      "label": "Guest Bathroom",
+      "gallery": []
+    },
+
+    "guest_bed_up": {
+      "label": "Guest Bedroom",
+      "gallery": []
+    },
+
+    "guest_wardrobe": {
+      "label": "Guest Wardrobe",
+      "gallery": []
+    }
+  },
+
+  "roomsById": {
+    "1": {
+      "label": "Living Room",
+      "gallery": [
+        "/listings/media/prod_demo_house_01/galleries/room_001_living_room/001.jpeg",
+        "/listings/media/prod_demo_house_01/galleries/room_001_living_room/002.jpeg",
+        "/listings/media/prod_demo_house_01/galleries/room_001_living_room/003.jpeg"
+      ]
+    },
+    "2": {
+      "label": "Guest Bathroom",
+      "gallery": [
+        "/listings/media/prod_demo_house_01/galleries/room_002_guestbath_room/001.jpeg",
+        "/listings/media/prod_demo_house_01/galleries/room_002_guestbath_room/002.jpeg",
+        "/listings/media/prod_demo_house_01/galleries/room_002_guestbath_room/003.jpeg"
+      ]
+    },
+    "3": {
+      "label": "Guest Bedroom",
+      "gallery": [
+        "/listings/media/prod_demo_house_01/galleries/room_003_guestbed_room/001.jpeg",
+        "/listings/media/prod_demo_house_01/galleries/room_003_guestbed_room/002.jpeg",
+        "/listings/media/prod_demo_house_01/galleries/room_003_guestbed_room/003.jpeg"
+      ]
+    },
+    "4": {
+      "label": "Kitchen",
+      "gallery": [
+        "/listings/media/prod_demo_house_01/galleries/room_004_kitchen_room/001.jpeg",
+        "/listings/media/prod_demo_house_01/galleries/room_004_kitchen_room/002.jpeg",
+        "/listings/media/prod_demo_house_01/galleries/room_004_kitchen_room/003.jpeg"
+      ]
+    },
+    "5": {
+      "label": "Laundry",
+      "gallery": [
+        "/listings/media/prod_demo_house_01/galleries/room_005_laundry_room/001.jpeg",
+        "/listings/media/prod_demo_house_01/galleries/room_005_laundry_room/002.jpeg",
+        "/listings/media/prod_demo_house_01/galleries/room_005_laundry_room/003.jpeg"
+      ]
+    },
+    "6": {
+      "label": "Garage",
+      "gallery": [
+        "/listings/media/prod_demo_house_01/galleries/room_006_garage_room/001.jpeg",
+        "/listings/media/prod_demo_house_01/galleries/room_006_garage_room/002.jpeg",
+        "/listings/media/prod_demo_house_01/galleries/room_006_garage_room/003.jpeg"
+      ]
+    },
+    "9": {
+      "label": "Master Bedroom",
+      "gallery": [
+        "/listings/media/prod_demo_house_01/galleries/room_009_masterbed_room/001.jpeg",
+        "/listings/media/prod_demo_house_01/galleries/room_009_masterbed_room/002.jpeg",
+        "/listings/media/prod_demo_house_01/galleries/room_009_masterbed_room/003.jpeg"
+      ]
+    },
+    "11": {
+      "label": "Master Bathroom",
+      "gallery": [
+        "/listings/media/prod_demo_house_01/galleries/room_010_masterbath_room/001.jpeg",
+        "/listings/media/prod_demo_house_01/galleries/room_010_masterbath_room/002.jpeg",
+        "/listings/media/prod_demo_house_01/galleries/room_010_masterbath_room/003.jpeg"
+      ]
+    }
+  },
+
+  "floorplans": {
+    "down": "/listings/media/prod_demo_house_01/galleries/floorplan/floorplan_down_123DemoSt_01.svg",
+    "up": "/listings/media/prod_demo_house_01/galleries/floorplan/floorplan_up_123DemoSt_02.svg"
+  },
+
+  "floorplan": "/listings/media/prod_demo_house_01/galleries/floorplan/floorplan_down_123DemoSt_01.svg",
+
+  "drone": {
+    "videos": [
+      "/listings/media/prod_demo_house_01/galleries/dronescrub/ds001.mp4"
+    ]
+  }
+}

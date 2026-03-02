@@ -1,0 +1,16 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+
+# OS junk
+.DS_Store
+
+# local env
+.env
+.env.*
+
+# listing media (will live in R2)
+public/listings/media/
+public/listings/media/**
