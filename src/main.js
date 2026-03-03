@@ -115,6 +115,8 @@ let listingManifest = null;
 // -----------------------------
 let activeTab = "main"; // "main" | "drone"
 let activeTopTab = "tour"; // "tour" | "gallery" | placeholders
+let topTabTransitionTimer = 0;
+let topTabTransitionCleanupTimer = 0;
 const mobileViewportLockQuery = "(max-width: 820px)";
 const defaultViewportMetaContent =
   viewportMeta?.getAttribute("content") || "width=device-width, initial-scale=1.0";
@@ -346,14 +348,53 @@ function updateTopTabIndicator() {
   indicator.style.opacity = "1";
 }
 
-function setTopTab(tab) {
-  activeTopTab = tab;
-  for (const btn of topTabButtons) {
-    const isActive = (btn.dataset.topTab || "") === tab;
-    btn.classList.toggle("isActive", isActive);
+function getTopTabTransitionTargets(tab) {
+  const targets = [];
+  if (tab === "tour") {
+    if (tourFrameViewport) targets.push(tourFrameViewport);
+    if (sidebarEl) targets.push(sidebarEl);
+  } else if (tab === "gallery") {
+    if (galleryPageView) targets.push(galleryPageView);
+  } else if (tab === "info") {
+    if (infoPageView) targets.push(infoPageView);
+  } else if (tab === "videos") {
+    if (videosPageView) targets.push(videosPageView);
+  } else if (tab === "floorplan") {
+    if (floorplanPageView) targets.push(floorplanPageView);
   }
-  updateTopTabIndicator();
-  if (topTabSelect && topTabSelect.value !== tab) topTabSelect.value = tab;
+  for (const target of targets) {
+    target.classList.add("topTabTransitionTarget");
+  }
+  return targets;
+}
+
+function clearTopTabTransitionTimers() {
+  if (topTabTransitionTimer) {
+    clearTimeout(topTabTransitionTimer);
+    topTabTransitionTimer = 0;
+  }
+  if (topTabTransitionCleanupTimer) {
+    clearTimeout(topTabTransitionCleanupTimer);
+    topTabTransitionCleanupTimer = 0;
+  }
+}
+
+function clearTopTabTransitionClasses() {
+  const targets = [
+    tourFrameViewport,
+    sidebarEl,
+    galleryPageView,
+    infoPageView,
+    videosPageView,
+    floorplanPageView
+  ].filter(Boolean);
+  for (const target of targets) {
+    target.classList.remove("isTopTabExiting", "isTopTabEntering", "isTopTabEnteringActive");
+  }
+}
+
+function applyTopTabState(tab) {
+  activeTopTab = tab;
 
   const isGalleryTab = tab === "gallery";
   const isInfoTab = tab === "info";
@@ -436,6 +477,60 @@ function setTopTab(tab) {
     });
   }
   requestAnimationFrame(() => applyTourFrameScale());
+}
+
+function shouldAnimateTopTabSwitch(nextTab, immediate) {
+  if (immediate) return false;
+  if (nextTab === activeTopTab) return false;
+  if (typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    return false;
+  }
+  return true;
+}
+
+function setTopTab(tab, options = {}) {
+  const nextTab = String(tab || "tour").toLowerCase();
+  const immediate = Boolean(options.immediate);
+  const previousTab = activeTopTab;
+
+  for (const btn of topTabButtons) {
+    const isActive = (btn.dataset.topTab || "") === nextTab;
+    btn.classList.toggle("isActive", isActive);
+  }
+  updateTopTabIndicator();
+  if (topTabSelect && topTabSelect.value !== nextTab) topTabSelect.value = nextTab;
+
+  clearTopTabTransitionTimers();
+  clearTopTabTransitionClasses();
+
+  if (!shouldAnimateTopTabSwitch(nextTab, immediate)) {
+    applyTopTabState(nextTab);
+    return;
+  }
+
+  const outgoingTargets = getTopTabTransitionTargets(previousTab);
+  for (const target of outgoingTargets) {
+    target.classList.add("isTopTabExiting");
+  }
+
+  topTabTransitionTimer = window.setTimeout(() => {
+    topTabTransitionTimer = 0;
+    applyTopTabState(nextTab);
+    const incomingTargets = getTopTabTransitionTargets(nextTab);
+    for (const target of incomingTargets) {
+      target.classList.add("isTopTabEntering");
+    }
+    requestAnimationFrame(() => {
+      for (const target of incomingTargets) {
+        target.classList.add("isTopTabEnteringActive");
+      }
+    });
+
+    topTabTransitionCleanupTimer = window.setTimeout(() => {
+      topTabTransitionCleanupTimer = 0;
+      clearTopTabTransitionClasses();
+    }, 230);
+  }, 150);
 }
 
 for (const btn of topTabButtons) {
@@ -3892,7 +3987,7 @@ async function loadListing(listingId) {
   ensureTourInteractionUnlockHandlers();
   renderGalleryMenuItems();
   renderPageGalleryList();
-  setTopTab(activeTopTab);
+  setTopTab(activeTopTab, { immediate: true });
 }
 
 function renderSidebarGallery(cacheEntry) {
