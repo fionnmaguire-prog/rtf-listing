@@ -1192,11 +1192,7 @@ function createVideoScrubberElement(src) {
   const loadButton = document.createElement("button");
   loadButton.type = "button";
   loadButton.className = "droneScrubberLoadButton";
-  loadButton.textContent = "Load 360";
-
-  const loadHelper = document.createElement("div");
-  loadHelper.className = "droneScrubberLoadHelper";
-  loadHelper.textContent = "Loads the 360 for smooth scrubbing";
+  loadButton.textContent = "Load Aerial 360";
 
   const loadStatus = document.createElement("div");
   loadStatus.className = "droneScrubberLoadStatus";
@@ -1204,7 +1200,6 @@ function createVideoScrubberElement(src) {
   loadStatus.setAttribute("aria-live", "polite");
 
   overlayInner.appendChild(loadButton);
-  overlayInner.appendChild(loadHelper);
   overlayInner.appendChild(loadStatus);
   overlay.appendChild(overlayInner);
 

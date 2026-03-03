@@ -759,17 +759,21 @@ body.isFloorplanView {
 .droneScrubberOverlayInner {
   display: grid;
   justify-items: center;
-  gap: 10px;
+  gap: 12px;
   text-align: center;
+  padding: 22px 24px;
+  border-radius: 24px;
+  background: #ffffff;
+  box-shadow: 0 18px 36px rgba(8, 11, 18, 0.2);
 }
 
 .droneScrubberLoadButton {
-  min-width: 144px;
-  min-height: 48px;
-  padding: 12px 24px;
+  min-width: 158px;
+  min-height: 53px;
+  padding: 13px 26px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.92);
-  background: rgba(46, 26, 71, 0.94);
+  border: 2px solid #2e1a47;
+  background: var(--shadowed-midnight-flat);
   color: #ffffff;
   font-size: 18px;
   font-weight: 700;
@@ -783,16 +787,11 @@ body.isFloorplanView {
   cursor: progress;
 }
 
-.droneScrubberLoadHelper,
 .droneScrubberLoadStatus {
   max-width: min(320px, 78%);
-  color: #ffffff;
+  color: #2e1a47;
   font-size: 13px;
   line-height: 1.35;
-}
-
-.droneScrubberLoadHelper {
-  opacity: 0.84;
 }
 
 .droneScrubberLoadStatus {
