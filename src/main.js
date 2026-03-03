@@ -269,6 +269,18 @@ function setSidebarTab(tab) {
   if (!sidebarEl) return;
   if (tab === "drone") sidebarEl.classList.add("isDrone");
   else sidebarEl.classList.remove("isDrone");
+
+  if (tab === "drone") {
+    requestAnimationFrame(() => {
+      scheduleFloorplanInitRetry(90);
+      refitFloorplanAfterResize();
+    });
+    window.setTimeout(() => {
+      if (activeTab !== "drone") return;
+      scheduleFloorplanInitRetry(90);
+      refitFloorplanAfterResize();
+    }, 420);
+  }
 }
 
 function mountFloorplanFrameToTab() {
@@ -364,6 +376,12 @@ function setTopTab(tab) {
 
   closeFloorplanLevelMenu();
   closeVideoModeMenus();
+  if (activeTab === "drone") {
+    requestAnimationFrame(() => {
+      scheduleFloorplanInitRetry(90);
+      refitFloorplanAfterResize();
+    });
+  }
   requestAnimationFrame(() => applyTourFrameScale());
 }
 
