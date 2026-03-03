@@ -517,7 +517,6 @@ let activeVideoMode = "scrub";
 let openVideoModeMenuKey = "";
 let videoModeMenuBound = false;
 let tourInteractionUnlockBound = false;
-const scrubVideoPrimeCache = new Map();
 const tourFrameScaleState = {
   baseWidth: 0,
   baseHeight: 0,
@@ -1161,48 +1160,6 @@ const DRONE_SCRUB_SENSITIVITY = 0.55;
 const DRONE_SCRUB_FRAME_STEP = 5 / 24;
 const DRONE_SCRUB_SEEK_INTERVAL_MS = 60;
 
-function shouldPrimeScrubVideoSource() {
-  const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-  if (connection?.saveData) return false;
-  const effectiveType = String(connection?.effectiveType || "").toLowerCase();
-  if (effectiveType === "slow-2g" || effectiveType === "2g") return false;
-  return true;
-}
-
-function primeScrubVideoSource(src) {
-  const normalizedSrc = typeof src === "string" ? src.trim() : "";
-  if (!normalizedSrc || !shouldPrimeScrubVideoSource()) return null;
-
-  const existing = scrubVideoPrimeCache.get(normalizedSrc);
-  if (existing) return existing.video;
-
-  const video = document.createElement("video");
-  video.preload = "auto";
-  video.muted = true;
-  video.playsInline = true;
-  video.src = normalizedSrc;
-  video.setAttribute("aria-hidden", "true");
-  video.setAttribute("tabindex", "-1");
-
-  video.addEventListener(
-    "loadedmetadata",
-    () => {
-      if (!Number.isFinite(video.duration) || video.duration <= 0) return;
-      try {
-        video.currentTime = Math.min(0.01, video.duration);
-      } catch {}
-    },
-    { once: true }
-  );
-
-  try {
-    video.load();
-  } catch {}
-
-  scrubVideoPrimeCache.set(normalizedSrc, { video });
-  return video;
-}
-
 function isSidebarStackedPresentation() {
   const width = window.innerWidth || document.documentElement.clientWidth || 0;
   const height = window.innerHeight || document.documentElement.clientHeight || 0;
@@ -1213,6 +1170,7 @@ function isSidebarStackedPresentation() {
 function createVideoScrubberElement(src) {
   const wrap = document.createElement("div");
   wrap.className = "droneScrubber";
+  wrap._mountImmediately = true;
   const scrubDebug = params.get("scrubDebug") === "1" || params.get("debug") === "1";
 
   const video = document.createElement("video");
@@ -1221,10 +1179,34 @@ function createVideoScrubberElement(src) {
   video.playsInline = true;
   video.preload = "auto";
   video.muted = true;
-  video.src = src;
   video.setAttribute("controlslist", "nodownload noplaybackrate noremoteplayback nofullscreen");
   video.disablePictureInPicture = true;
-  primeScrubVideoSource(src);
+  video.setAttribute("aria-hidden", "true");
+
+  const overlay = document.createElement("div");
+  overlay.className = "droneScrubberOverlay";
+
+  const overlayInner = document.createElement("div");
+  overlayInner.className = "droneScrubberOverlayInner";
+
+  const loadButton = document.createElement("button");
+  loadButton.type = "button";
+  loadButton.className = "droneScrubberLoadButton";
+  loadButton.textContent = "Load 360";
+
+  const loadHelper = document.createElement("div");
+  loadHelper.className = "droneScrubberLoadHelper";
+  loadHelper.textContent = "Loads the 360 for smooth scrubbing";
+
+  const loadStatus = document.createElement("div");
+  loadStatus.className = "droneScrubberLoadStatus";
+  loadStatus.hidden = true;
+  loadStatus.setAttribute("aria-live", "polite");
+
+  overlayInner.appendChild(loadButton);
+  overlayInner.appendChild(loadHelper);
+  overlayInner.appendChild(loadStatus);
+  overlay.appendChild(overlayInner);
 
   const controls = document.createElement("div");
   controls.className = "droneScrubberControls";
@@ -1241,12 +1223,6 @@ function createVideoScrubberElement(src) {
   hintText.textContent = "Use Handle to Rotate House";
   hint.appendChild(hintArrow);
   hint.appendChild(hintText);
-
-  const bufferingState = document.createElement("div");
-  bufferingState.className = "droneScrubberBuffering";
-  bufferingState.textContent = "Buffering";
-  bufferingState.hidden = true;
-  bufferingState.setAttribute("aria-hidden", "true");
 
   const range = document.createElement("input");
   range.className = "droneScrubberRange";
@@ -1307,7 +1283,7 @@ function createVideoScrubberElement(src) {
   const syncUi = () => {
     const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 0;
     const current = Number.isFinite(video.currentTime) ? video.currentTime : 0;
-    if (duration > 0) {
+    if (isScrubberReady && duration > 0) {
       const rangeMax = getScrubRangeMax(duration);
       if (range.max !== String(rangeMax)) range.max = String(rangeMax);
       range.disabled = false;
@@ -1330,20 +1306,10 @@ function createVideoScrubberElement(src) {
   let forceExactOnNextSeek = false;
   let decoderWarmed = false;
   let stallCount = 0;
-  let isBufferWaiting = false;
-
-  const setBufferWaiting = (nextState) => {
-    const active = Boolean(nextState);
-    if (isBufferWaiting === active) return;
-    isBufferWaiting = active;
-    bufferingState.hidden = !active;
-    bufferingState.setAttribute("aria-hidden", active ? "false" : "true");
-    wrap.classList.toggle("isBuffering", active);
-    logScrub(active ? "buffer-wait-start" : "buffer-wait-end", {
-      pendingSeekTime,
-      appliedSeekTime
-    });
-  };
+  let isScrubberReady = false;
+  let isLoading360 = false;
+  let fetchController = null;
+  let localObjectUrl = "";
 
   const clearQueuedSeekTimer = () => {
     if (!seekTimerId) return;
@@ -1374,18 +1340,180 @@ function createVideoScrubberElement(src) {
     }
   };
 
-  const isTimeBuffered = (targetTime, tolerance = 0.25) => {
-    const buffered = video.buffered;
-    if (!buffered) return false;
-    for (let i = 0; i < buffered.length; i++) {
-      const start = buffered.start(i) - tolerance;
-      const end = buffered.end(i) + tolerance;
-      if (targetTime >= start && targetTime <= end) return true;
+  const updateLoadStatus = (text, isError = false) => {
+    loadStatus.hidden = !text;
+    loadStatus.textContent = text;
+    wrap.classList.toggle("hasError", Boolean(isError));
+  };
+
+  const revokeLocalObjectUrl = () => {
+    if (!localObjectUrl) return;
+    URL.revokeObjectURL(localObjectUrl);
+    localObjectUrl = "";
+  };
+
+  const resetScrubberState = () => {
+    clearQueuedSeekTimer();
+    pendingSeekTime = NaN;
+    appliedSeekTime = NaN;
+    currentSeekTarget = NaN;
+    isSeeking = false;
+    lastSeekStartedAt = 0;
+    isDraggingRange = false;
+    forceExactOnNextSeek = false;
+    decoderWarmed = false;
+    stallCount = 0;
+    isScrubberReady = false;
+    range.disabled = true;
+    range.max = "0";
+    syncRangeValue(0);
+    loadButton.disabled = false;
+    loadStatus.hidden = true;
+    loadStatus.textContent = "";
+    wrap.classList.remove("isLoaded", "isLoading", "hasError");
+  };
+
+  const waitForScrubberReady = () =>
+    new Promise((resolve, reject) => {
+      let hasMetadata = video.readyState >= 1;
+      let hasCanPlay = video.readyState >= 3;
+      let settled = false;
+
+      const cleanup = () => {
+        video.removeEventListener("loadedmetadata", onLoadedMetadata);
+        video.removeEventListener("canplay", onCanPlay);
+        video.removeEventListener("canplaythrough", onCanPlayThrough);
+        video.removeEventListener("error", onError);
+      };
+
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve();
+      };
+
+      const onLoadedMetadata = () => {
+        hasMetadata = true;
+        if (hasCanPlay) finish();
+      };
+
+      const onCanPlay = () => {
+        hasCanPlay = true;
+        if (hasMetadata) finish();
+      };
+
+      const onCanPlayThrough = () => finish();
+
+      const onError = () => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(new Error("Video readiness failed"));
+      };
+
+      video.addEventListener("loadedmetadata", onLoadedMetadata);
+      video.addEventListener("canplay", onCanPlay);
+      video.addEventListener("canplaythrough", onCanPlayThrough);
+      video.addEventListener("error", onError);
+
+      if (video.readyState >= 4 || (hasMetadata && hasCanPlay)) finish();
+    });
+
+  const fetchScrubberBlob = async (url, signal) => {
+    const response = await fetch(url, { signal });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
     }
-    return false;
+
+    const contentLength = Number.parseInt(response.headers.get("content-length") || "", 10);
+    const totalBytes = Number.isFinite(contentLength) && contentLength > 0 ? contentLength : 0;
+    const reader = response.body?.getReader?.();
+    if (!reader) {
+      updateLoadStatus(totalBytes ? "Loading... 100%" : "Loading...");
+      return response.blob();
+    }
+
+    updateLoadStatus(totalBytes ? "Loading... 0%" : "Loading...");
+    const chunks = [];
+    let receivedBytes = 0;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      chunks.push(value);
+      receivedBytes += value.byteLength;
+      if (totalBytes > 0) {
+        const percent = Math.max(0, Math.min(100, Math.round((receivedBytes / totalBytes) * 100)));
+        updateLoadStatus(`Loading... ${percent}%`);
+      } else {
+        updateLoadStatus("Loading...");
+      }
+    }
+
+    if (totalBytes > 0) updateLoadStatus("Loading... 100%");
+    return new Blob(chunks, { type: response.headers.get("content-type") || "video/mp4" });
+  };
+
+  const loadScrubberIntoMemory = async () => {
+    if (isLoading360 || isScrubberReady) return;
+    isLoading360 = true;
+    loadButton.disabled = true;
+    wrap.classList.add("isLoading");
+    wrap.classList.remove("hasError");
+    updateLoadStatus("Loading...");
+    fetchController = new AbortController();
+
+    try {
+      const blob = await fetchScrubberBlob(src, fetchController.signal);
+      if (fetchController.signal.aborted) return;
+
+      revokeLocalObjectUrl();
+      localObjectUrl = URL.createObjectURL(blob);
+      video.src = localObjectUrl;
+      try {
+        video.load();
+      } catch {}
+
+      await waitForScrubberReady();
+
+      const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 0;
+      if (duration > 0) {
+        const startTime = Math.min(0.01, duration);
+        video.currentTime = startTime;
+        appliedSeekTime = quantizeSeekTime(startTime, duration);
+        syncRangeValue(timeToRangeValue(startTime, duration));
+      }
+
+      isScrubberReady = true;
+      wrap.classList.remove("isLoading", "hasError");
+      wrap.classList.add("isLoaded");
+      updateLoadStatus("");
+      syncUi();
+      logScrub("local-load-ready", { objectUrl: localObjectUrl });
+    } catch (error) {
+      if (fetchController?.signal?.aborted) return;
+      wrap.classList.remove("isLoading", "isLoaded");
+      wrap.classList.add("hasError");
+      loadButton.disabled = false;
+      revokeLocalObjectUrl();
+      try {
+        video.pause();
+        video.removeAttribute("src");
+        video.load();
+      } catch {}
+      updateLoadStatus("Couldn't load 360. Try again.", true);
+      logScrub("local-load-failed", { error: String(error?.message || error || "") });
+    } finally {
+      isLoading360 = false;
+      fetchController = null;
+      wrap.classList.remove("isLoading");
+    }
   };
 
   const startSeek = (targetTime, exact = false) => {
+    if (!isScrubberReady) return;
     const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 0;
     if (!duration) return;
 
@@ -1413,20 +1541,13 @@ function createVideoScrubberElement(src) {
   };
 
   const pumpSeekQueue = (force = false) => {
+    if (!isScrubberReady) return;
     const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 0;
     if (!duration || !Number.isFinite(pendingSeekTime)) return;
     if (isSeeking) return;
 
     const target = quantizeSeekTime(pendingSeekTime, duration);
-    if (Number.isFinite(appliedSeekTime) && Math.abs(target - appliedSeekTime) <= DRONE_SCRUB_FRAME_STEP / 2) {
-      setBufferWaiting(false);
-      return;
-    }
-
-    if (!isTimeBuffered(target, 0.25)) {
-      setBufferWaiting(true);
-      return;
-    }
+    if (Number.isFinite(appliedSeekTime) && Math.abs(target - appliedSeekTime) <= DRONE_SCRUB_FRAME_STEP / 2) return;
 
     clearQueuedSeekTimer();
     const elapsed = performance.now() - lastSeekStartedAt;
@@ -1440,11 +1561,11 @@ function createVideoScrubberElement(src) {
 
     const exact = force || forceExactOnNextSeek;
     forceExactOnNextSeek = false;
-    setBufferWaiting(false);
     startSeek(target, exact);
   };
 
   const queueSeekToRangeValue = (rawValue, exact = false) => {
+    if (!isScrubberReady) return;
     const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 0;
     const next = Number(rawValue);
     if (!Number.isFinite(next) || !duration) return;
@@ -1460,6 +1581,7 @@ function createVideoScrubberElement(src) {
   };
 
   range.addEventListener("pointerdown", () => {
+    if (!isScrubberReady) return;
     isDraggingRange = true;
     warmDecoder();
   });
@@ -1467,6 +1589,7 @@ function createVideoScrubberElement(src) {
   range.addEventListener("pointercancel", finishDragSeek);
   range.addEventListener("change", finishDragSeek);
   range.addEventListener("input", () => {
+    if (!isScrubberReady) return;
     isDraggingRange = true;
     warmDecoder();
     queueSeekToRangeValue(range.value, false);
@@ -1518,6 +1641,7 @@ function createVideoScrubberElement(src) {
   };
 
   wrap.addEventListener("pointerenter", () => {
+    if (!isScrubberReady) return;
     if (hintVisible) return;
     if (revealHintTimer) clearTimeout(revealHintTimer);
     revealHintTimer = window.setTimeout(showHint, 1000);
@@ -1531,6 +1655,7 @@ function createVideoScrubberElement(src) {
   });
 
   wrap.addEventListener("pointerdown", (event) => {
+    if (!isScrubberReady) return;
     const isMobileTouch =
       event.pointerType === "touch" &&
       typeof window.matchMedia === "function" &&
@@ -1553,7 +1678,14 @@ function createVideoScrubberElement(src) {
     syncUi();
   };
 
+  loadButton.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    loadScrubberIntoMemory();
+  });
+
   video.addEventListener("loadedmetadata", () => {
+    if (!isScrubberReady) return;
     const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 0;
     if (duration > 0) {
       const startTime = Math.min(0.01, duration);
@@ -1577,10 +1709,6 @@ function createVideoScrubberElement(src) {
       pumpSeekQueue(true);
     }
   });
-  video.addEventListener("progress", () => {
-    if (!isBufferWaiting) return;
-    pumpSeekQueue(forceExactOnNextSeek);
-  });
   video.addEventListener("waiting", () => {
     stallCount += 1;
     logScrub("waiting");
@@ -1590,16 +1718,23 @@ function createVideoScrubberElement(src) {
     logScrub("stalled");
   });
   video.addEventListener("play", keepPaused);
-  video.addEventListener("click", (event) => {
-    event.preventDefault();
-    warmDecoder();
-    keepPaused();
-  });
+  wrap._destroyMedia = () => {
+    clearHintTimers();
+    fetchController?.abort();
+    fetchController = null;
+    resetScrubberState();
+    revokeLocalObjectUrl();
+    try {
+      video.pause();
+      video.removeAttribute("src");
+      video.load();
+    } catch {}
+  };
 
-  controls.appendChild(hint);
-  controls.appendChild(bufferingState);
-  controls.appendChild(range);
   wrap.appendChild(video);
+  wrap.appendChild(overlay);
+  controls.appendChild(hint);
+  controls.appendChild(range);
   wrap.appendChild(controls);
   return wrap;
 }
@@ -1650,6 +1785,16 @@ function createVideoMediaElement(src, mode = "scrub") {
   return frame;
 }
 
+function cleanupMountedMediaElement(mediaEl) {
+  if (!mediaEl || typeof mediaEl !== "object") return;
+  if (typeof mediaEl._destroyMedia === "function") {
+    try {
+      mediaEl._destroyMedia();
+    } catch {}
+    delete mediaEl._destroyMedia;
+  }
+}
+
 function getPrimaryMediaVideoEl(mediaEl) {
   if (!mediaEl) return null;
   if ((mediaEl.tagName || "").toLowerCase() === "video") return mediaEl;
@@ -1662,14 +1807,28 @@ function getPrimaryMediaVideoEl(mediaEl) {
 function mountMediaWhenReady(container, mediaEl) {
   if (!container) return;
   if (!mediaEl) {
+    cleanupMountedMediaElement(container.firstElementChild);
     container.innerHTML = "";
     return;
   }
 
+  const nextMountToken = String((Number(container.dataset.mountToken || "0") || 0) + 1);
+  container.dataset.mountToken = nextMountToken;
+
   const commit = () => {
+    if (container.dataset.mountToken !== nextMountToken) {
+      cleanupMountedMediaElement(mediaEl);
+      return;
+    }
+    cleanupMountedMediaElement(container.firstElementChild);
     container.innerHTML = "";
     container.appendChild(mediaEl);
   };
+
+  if (mediaEl._mountImmediately) {
+    commit();
+    return;
+  }
 
   const videoEl = getPrimaryMediaVideoEl(mediaEl);
   if (!videoEl) {
@@ -1725,6 +1884,8 @@ function getResolvedListingVideoSources(videos) {
 
 function clearMountedMedia(container) {
   if (!container) return;
+  container.dataset.mountToken = String((Number(container.dataset.mountToken || "0") || 0) + 1);
+  cleanupMountedMediaElement(container.firstElementChild);
   container.innerHTML = "";
   delete container.dataset.mediaKey;
 }
@@ -1878,7 +2039,6 @@ function renderDroneVideos(videos) {
   } else if (!options.some((option) => option.value === activeVideoMode)) {
     activeVideoMode = options[0].value;
   }
-  if (sources.scrub) primeScrubVideoSource(sources.scrub);
   syncVideoModeControls(videos);
   syncRenderedDroneMedia();
 }

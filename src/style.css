@@ -742,7 +742,61 @@ body.isFloorplanView {
   display: block;
   object-fit: cover;
   background: transparent;
-  cursor: ew-resize;
+  pointer-events: none;
+}
+
+.droneScrubberOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: linear-gradient(180deg, rgba(14, 8, 23, 0.12), rgba(14, 8, 23, 0.34));
+  transition: opacity 180ms ease, visibility 180ms ease;
+}
+
+.droneScrubberOverlayInner {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  text-align: center;
+}
+
+.droneScrubberLoadButton {
+  min-width: 144px;
+  min-height: 48px;
+  padding: 12px 24px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.92);
+  background: rgba(46, 26, 71, 0.94);
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  box-shadow: 0 12px 24px rgba(8, 11, 18, 0.32);
+}
+
+.droneScrubberLoadButton:disabled {
+  opacity: 0.68;
+  cursor: progress;
+}
+
+.droneScrubberLoadHelper,
+.droneScrubberLoadStatus {
+  max-width: min(320px, 78%);
+  color: #ffffff;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.droneScrubberLoadHelper {
+  opacity: 0.84;
+}
+
+.droneScrubberLoadStatus {
+  font-weight: 600;
 }
 
 .droneScrubberControls {
@@ -758,6 +812,9 @@ body.isFloorplanView {
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 999px;
   padding: 8px 14px;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 180ms ease, visibility 180ms ease;
 }
 
 .droneScrubberHint {
@@ -779,30 +836,24 @@ body.isFloorplanView {
   transition: opacity 180ms ease, transform 180ms ease;
 }
 
-.droneScrubberBuffering {
-  position: absolute;
-  right: 14px;
-  bottom: calc(100% + 10px);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 22px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  color: #ffffff;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  background: rgba(46, 26, 71, 0.94);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  box-shadow: 0 8px 18px rgba(8, 11, 18, 0.3);
-  pointer-events: none;
-}
-
 .droneScrubberHint.isVisible {
   opacity: 1;
   transform: translateY(0);
+}
+
+.droneScrubber.isLoaded .droneScrubberOverlay {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.droneScrubber.isLoaded .droneScrubberControls {
+  opacity: 1;
+  visibility: visible;
+}
+
+.droneScrubber.hasError .droneScrubberLoadStatus {
+  color: #ffd3d3;
 }
 
 .droneScrubberHintArrow {
