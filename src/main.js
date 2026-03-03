@@ -105,7 +105,7 @@ if (!sidebarEl) console.error("[listing] Missing required element #sidebar");
 // e.g. listing.rtfmediasolutions.com/?id=prod_demo_house_01
 const params = new URLSearchParams(location.search);
 const DEFAULT_LISTING_ID = "prod_demo_house_01";
-const EXTERIOR_GALLERY_NODE_ID = 100;
+const EXTERIOR_GALLERY_NODE_ID = 0;
 let currentListingId = DEFAULT_LISTING_ID;
 let listingManifest = null;
 

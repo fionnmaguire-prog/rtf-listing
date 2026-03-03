@@ -142,18 +142,6 @@
         {
           "thumb": "galleries/room_000_exterior/thumb/001.webp",
           "full": "galleries/room_000_exterior/full/001.webp"
-        },
-        {
-          "thumb": "galleries/room_000_exterior/thumb/002.webp",
-          "full": "galleries/room_000_exterior/full/002.webp"
-        },
-        {
-          "thumb": "galleries/room_000_exterior/thumb/003.webp",
-          "full": "galleries/room_000_exterior/full/003.webp"
-        },
-        {
-          "thumb": "galleries/room_000_exterior/thumb/004.webp",
-          "full": "galleries/room_000_exterior/full/004.webp"
         }
       ]
     },
@@ -321,46 +309,26 @@
       ]
     },
     "22": {
-      "label": "Exterior",
+      "label": "Backyard",
       "gallery": [
         {
-          "thumb": "galleries/room_022_Exterior/thumb/001.webp",
-          "full": "galleries/room_022_Exterior/full/001.webp"
+          "thumb": "galleries/room_022_Backyard/thumb/001.webp",
+          "full": "galleries/room_022_Backyard/full/001.webp"
         },
         {
-          "thumb": "galleries/room_022_Exterior/thumb/002.webp",
-          "full": "galleries/room_022_Exterior/full/002.webp"
+          "thumb": "galleries/room_022_Backyard/thumb/002.webp",
+          "full": "galleries/room_022_Backyard/full/002.webp"
         },
         {
-          "thumb": "galleries/room_022_Exterior/thumb/003.webp",
-          "full": "galleries/room_022_Exterior/full/003.webp"
-        },
-        {
-          "thumb": "galleries/room_022_Exterior/thumb/004.webp",
-          "full": "galleries/room_022_Exterior/full/004.webp"
-        }
-      ]
-    },
-    "100": {
-      "label": "Exterior",
-      "gallery": [
-        {
-          "thumb": "galleries/room_100_exterior/thumb/001.webp",
-          "full": "galleries/room_100_exterior/full/001.webp"
-        },
-        {
-          "thumb": "galleries/room_100_exterior/thumb/002.webp",
-          "full": "galleries/room_100_exterior/full/002.webp"
-        },
-        {
-          "thumb": "galleries/room_100_exterior/thumb/003.webp",
-          "full": "galleries/room_100_exterior/full/003.webp"
-        },
-        {
-          "thumb": "galleries/room_100_exterior/thumb/004.webp",
-          "full": "galleries/room_100_exterior/full/004.webp"
+          "thumb": "galleries/room_022_Backyard/thumb/003.webp",
+          "full": "galleries/room_022_Backyard/full/003.webp"
         }
       ]
     }
+  },
+  "galleryAliasesByNode": {
+    "23": 22,
+    "24": 22,
+    "100": 0
   }
 }
