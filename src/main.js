@@ -135,6 +135,7 @@ const GALLERY_DEFAULT_IMAGE_HEIGHT = 600;
 const galleryRenderCache = new Map();
 const galleryThumbLoadState = new Map();
 const galleryFullLoadState = new Map();
+const galleryOriginalLoadState = new Map();
 let galleryThumbObserver = null;
 let galleryDeferredApplyRafId = 0;
 let galleryDeferredApplyTimerId = 0;
@@ -774,6 +775,19 @@ function deriveSizedGalleryAssetPath(rawPath, sizeSegment) {
   return `${basePath.slice(0, slashIndex)}/${size}/${basePath.slice(slashIndex + 1)}${suffix}`;
 }
 
+function deriveOriginalGalleryAssetPath(rawPath, extension = "jpg") {
+  const raw = typeof rawPath === "string" ? rawPath.trim() : "";
+  const ext = typeof extension === "string" ? extension.trim().replace(/^\./, "") : "";
+  if (!raw) return "";
+
+  const suffixMatch = raw.match(/([?#].*)$/);
+  const suffix = suffixMatch ? suffixMatch[1] : "";
+  const basePath = suffix ? raw.slice(0, -suffix.length) : raw;
+  const withoutSizeSegment = basePath.replace(/\/(thumb|medium|full)\//i, "/");
+  if (!ext) return `${withoutSizeSegment}${suffix}`;
+  return `${withoutSizeSegment.replace(/\.[^/.]+$/i, "")}.${ext}${suffix}`;
+}
+
 function normalizeImageDimensionValue(value, fallback) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
@@ -813,13 +827,17 @@ function normalizeGalleryAsset(value, index = 0) {
     rawFull =
       typeof value.full === "string"
         ? value.full.trim()
-        : typeof value.original === "string"
-          ? value.original.trim()
-          : typeof value.src === "string"
+        : typeof value.src === "string"
             ? value.src.trim()
             : typeof value.url === "string"
               ? value.url.trim()
               : "";
+    rawOriginal =
+      typeof value.original === "string"
+        ? value.original.trim()
+        : typeof value.source === "string"
+          ? value.source.trim()
+          : "";
     rawFallbackThumb =
       typeof value.fallbackThumb === "string"
         ? value.fallbackThumb.trim()
@@ -844,7 +862,6 @@ function normalizeGalleryAsset(value, index = 0) {
         : typeof value.originalFallback === "string"
           ? value.originalFallback.trim()
           : "";
-    rawOriginal = rawFull || rawMedium || rawThumb;
     width = normalizeImageDimensionValue(value.width, width);
     height = normalizeImageDimensionValue(value.height, height);
   }
@@ -854,6 +871,7 @@ function normalizeGalleryAsset(value, index = 0) {
   const derivedThumb = rawThumb || deriveSizedGalleryAssetPath(baseSource, "thumb");
   const derivedMedium = rawMedium || deriveSizedGalleryAssetPath(baseSource || rawFull, "medium");
   const derivedFull = rawFull || deriveSizedGalleryAssetPath(baseSource, "full");
+  const derivedOriginal = rawOriginal || deriveOriginalGalleryAssetPath(rawFull || rawMedium || rawThumb || baseSource, "jpg");
 
   const thumbCandidates = dedupeUrls(
     [
@@ -890,21 +908,37 @@ function normalizeGalleryAsset(value, index = 0) {
       derivedThumb
     ].map(resolveListingAssetUrl)
   );
+  const originalCandidates = dedupeUrls(
+    [
+      derivedOriginal,
+      deriveOriginalGalleryAssetPath(rawFallbackOriginal || rawFallbackFull || fallbackSource, "jpg"),
+      rawFallbackOriginal,
+      fallbackSource,
+      rawFallbackFull,
+      derivedFull,
+      baseSource,
+      derivedThumb
+    ].map(resolveListingAssetUrl)
+  );
 
   return {
     key: fullCandidates[0] || thumbCandidates[0] || fallbackId,
     thumb: thumbCandidates[0] || fullCandidates[0] || "",
     medium: mediumCandidates[0] || "",
     full: fullCandidates[0] || thumbCandidates[0] || "",
+    original: originalCandidates[0] || fullCandidates[0] || thumbCandidates[0] || "",
     thumbCandidates,
     mediumCandidates,
     fullCandidates,
+    originalCandidates,
     width,
     height,
     resolvedThumbUrl: "",
     resolvedFullUrl: "",
+    resolvedOriginalUrl: "",
     thumbLoadPromise: null,
-    fullLoadPromise: null
+    fullLoadPromise: null,
+    originalLoadPromise: null
   };
 }
 
@@ -2042,6 +2076,7 @@ function ensureGalleryRenderCacheEntry(cacheKey, label, items) {
       img.loading = "lazy";
       img.decoding = "async";
       img.setAttribute("fetchpriority", "low");
+      img.dataset.galleryLoadTier = items.length === 1 ? "full" : "thumb";
       img.width = asset.width || GALLERY_DEFAULT_IMAGE_WIDTH;
       img.height = asset.height || GALLERY_DEFAULT_IMAGE_HEIGHT;
       const aspectRatio = `${img.width} / ${img.height}`;
@@ -2092,8 +2127,8 @@ function prefetchGalleryPreviewNeighbors(items, activeIndex) {
   requestIdleWork(() => {
     const prev = items[activeIndex - 1];
     const next = items[activeIndex + 1];
-    if (prev) warmGalleryAssetFull(prev);
-    if (next) warmGalleryAssetFull(next);
+    if (prev) warmGalleryAssetOriginal(prev);
+    if (next) warmGalleryAssetOriginal(next);
   }, 600);
 }
 
@@ -2116,10 +2151,10 @@ function renderGalleryPreviewSlide(previewState, nextIndex) {
   previewState.frame.classList.add("isLoading");
   previewState.image.removeAttribute("src");
   previewState.image.alt = getGalleryAssetAlt(previewState.label, index);
-  previewState.wrap.dataset.src = asset.full || asset.thumb || asset.key;
+  previewState.wrap.dataset.src = asset.original || asset.full || asset.thumb || asset.key;
   previewState.wrap.dataset.index = String(index);
 
-  warmGalleryAssetFull(asset).then((url) => {
+  warmGalleryAssetOriginal(asset).then((url) => {
     if (!galleryPreviewState || galleryPreviewState !== previewState) return;
     if (galleryPreviewState.index !== index || !url) return;
     previewState.image.src = url;
@@ -3148,6 +3183,36 @@ function warmGalleryAssetFull(asset) {
   return asset.fullLoadPromise;
 }
 
+function warmGalleryAssetOriginal(asset) {
+  if (!asset) return Promise.resolve("");
+  if (asset.resolvedOriginalUrl) return Promise.resolve(asset.resolvedOriginalUrl);
+  for (const url of asset.originalCandidates) {
+    const cached = galleryOriginalLoadState.get(url);
+    if (cached?.status === "loaded") {
+      asset.resolvedOriginalUrl = url;
+      if (cached.width > 0 && cached.height > 0 && (!asset.width || !asset.height)) {
+        asset.width = cached.width;
+        asset.height = cached.height;
+      }
+      return Promise.resolve(url);
+    }
+  }
+  if (asset.originalLoadPromise) return asset.originalLoadPromise;
+
+  asset.originalLoadPromise = loadGalleryAssetCandidates(asset.originalCandidates, galleryOriginalLoadState)
+    .then((url) => {
+      asset.resolvedOriginalUrl = url;
+      asset.originalLoadPromise = null;
+      return url;
+    })
+    .catch(() => {
+      asset.originalLoadPromise = null;
+      return "";
+    });
+
+  return asset.originalLoadPromise;
+}
+
 function applyGalleryElementDimensions(imgEl, asset, width, height) {
   const normalizedWidth = Number(width);
   const normalizedHeight = Number(height);
@@ -3168,18 +3233,23 @@ function applyGalleryElementDimensions(imgEl, asset, width, height) {
 }
 
 function loadThumbIntoElement(imgEl, asset, candidateIndex = 0) {
-  const candidates = asset.resolvedThumbUrl
-    ? [asset.resolvedThumbUrl, ...asset.thumbCandidates.filter((url) => url !== asset.resolvedThumbUrl)]
-    : asset.thumbCandidates;
+  const loadTier = imgEl.dataset.galleryLoadTier === "full" ? "full" : "thumb";
+  const stateMap = loadTier === "full" ? galleryFullLoadState : galleryThumbLoadState;
+  const resolvedUrl = loadTier === "full" ? asset.resolvedFullUrl : asset.resolvedThumbUrl;
+  const tierCandidates = loadTier === "full" ? asset.fullCandidates : asset.thumbCandidates;
+  const candidates = resolvedUrl
+    ? [resolvedUrl, ...tierCandidates.filter((url) => url !== resolvedUrl)]
+    : tierCandidates;
   const url = candidates[candidateIndex];
   if (!url) {
     imgEl.dataset.galleryThumbHydrated = "error";
     return;
   }
 
-  const existing = galleryThumbLoadState.get(url);
+  const existing = stateMap.get(url);
   if (existing?.status === "loaded") {
-    asset.resolvedThumbUrl = url;
+    if (loadTier === "full") asset.resolvedFullUrl = url;
+    else asset.resolvedThumbUrl = url;
     applyGalleryElementDimensions(
       imgEl,
       asset,
@@ -3194,22 +3264,23 @@ function loadThumbIntoElement(imgEl, asset, candidateIndex = 0) {
 
   const handleLoad = () => {
     imgEl.removeEventListener("error", handleError);
-    asset.resolvedThumbUrl = url;
+    if (loadTier === "full") asset.resolvedFullUrl = url;
+    else asset.resolvedThumbUrl = url;
     const width = imgEl.naturalWidth || asset.width || GALLERY_DEFAULT_IMAGE_WIDTH;
     const height = imgEl.naturalHeight || asset.height || GALLERY_DEFAULT_IMAGE_HEIGHT;
     applyGalleryElementDimensions(imgEl, asset, width, height);
-    galleryThumbLoadState.set(url, { status: "loaded", image: null, promise: null, width, height });
+    stateMap.set(url, { status: "loaded", image: null, promise: null, width, height });
     imgEl.dataset.galleryThumbHydrated = "true";
     imgEl.classList.add("isLoaded");
   };
 
   const handleError = () => {
     imgEl.removeEventListener("load", handleLoad);
-    galleryThumbLoadState.set(url, { status: "error", image: null, promise: null });
+    stateMap.set(url, { status: "error", image: null, promise: null });
     loadThumbIntoElement(imgEl, asset, candidateIndex + 1);
   };
 
-  galleryThumbLoadState.set(url, { status: "loading", image: null, promise: null });
+  stateMap.set(url, { status: "loading", image: null, promise: null });
   imgEl.addEventListener("load", handleLoad, { once: true });
   imgEl.addEventListener("error", handleError, { once: true });
   imgEl.src = url;
@@ -3398,6 +3469,7 @@ async function loadListing(listingId) {
   galleryRenderCache.clear();
   galleryThumbLoadState.clear();
   galleryFullLoadState.clear();
+  galleryOriginalLoadState.clear();
   lastAppliedKey = null;
   cancelIdleWork(galleryIdlePrefetchHandle);
   galleryIdlePrefetchHandle = 0;
