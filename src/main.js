@@ -129,8 +129,8 @@ let galleryAliasByNode = new Map();
 let listingVideoSources = { scrub: [], drone: [] };
 const GALLERY_DEFERRED_APPLY_MS = 220;
 const GALLERY_THUMB_ROOT_MARGIN = "300px";
-const GALLERY_DEFAULT_IMAGE_WIDTH = 1600;
-const GALLERY_DEFAULT_IMAGE_HEIGHT = 900;
+const GALLERY_DEFAULT_IMAGE_WIDTH = 900;
+const GALLERY_DEFAULT_IMAGE_HEIGHT = 600;
 const galleryRenderCache = new Map();
 const galleryThumbLoadState = new Map();
 const galleryFullLoadState = new Map();
@@ -1903,7 +1903,9 @@ function ensureGalleryRenderCacheEntry(cacheKey, label, items) {
       img.setAttribute("fetchpriority", "low");
       img.width = asset.width || GALLERY_DEFAULT_IMAGE_WIDTH;
       img.height = asset.height || GALLERY_DEFAULT_IMAGE_HEIGHT;
-      img.style.aspectRatio = `${img.width} / ${img.height}`;
+      const aspectRatio = `${img.width} / ${img.height}`;
+      cell.style.aspectRatio = aspectRatio;
+      img.style.aspectRatio = aspectRatio;
       img._galleryAsset = asset;
       cell.appendChild(img);
       observeGalleryThumb(img);
@@ -2911,7 +2913,13 @@ function loadGalleryUrlWithState(url, stateMap) {
 
   const promise = new Promise((resolve, reject) => {
     image.onload = () => {
-      stateMap.set(url, { status: "loaded", image, promise: null });
+      stateMap.set(url, {
+        status: "loaded",
+        image,
+        promise: null,
+        width: image.naturalWidth || 0,
+        height: image.naturalHeight || 0
+      });
       resolve(url);
     };
     image.onerror = () => {
@@ -2943,8 +2951,13 @@ function warmGalleryAssetThumb(asset) {
   if (!asset) return Promise.resolve("");
   if (asset.resolvedThumbUrl) return Promise.resolve(asset.resolvedThumbUrl);
   for (const url of asset.thumbCandidates) {
-    if (galleryThumbLoadState.get(url)?.status === "loaded") {
+    const cached = galleryThumbLoadState.get(url);
+    if (cached?.status === "loaded") {
       asset.resolvedThumbUrl = url;
+      if (cached.width > 0 && cached.height > 0) {
+        asset.width = cached.width;
+        asset.height = cached.height;
+      }
       return Promise.resolve(url);
     }
   }
@@ -2968,8 +2981,13 @@ function warmGalleryAssetFull(asset) {
   if (!asset) return Promise.resolve("");
   if (asset.resolvedFullUrl) return Promise.resolve(asset.resolvedFullUrl);
   for (const url of asset.fullCandidates) {
-    if (galleryFullLoadState.get(url)?.status === "loaded") {
+    const cached = galleryFullLoadState.get(url);
+    if (cached?.status === "loaded") {
       asset.resolvedFullUrl = url;
+      if (cached.width > 0 && cached.height > 0 && (!asset.width || !asset.height)) {
+        asset.width = cached.width;
+        asset.height = cached.height;
+      }
       return Promise.resolve(url);
     }
   }
@@ -2989,6 +3007,25 @@ function warmGalleryAssetFull(asset) {
   return asset.fullLoadPromise;
 }
 
+function applyGalleryElementDimensions(imgEl, asset, width, height) {
+  const normalizedWidth = Number(width);
+  const normalizedHeight = Number(height);
+  if (!Number.isFinite(normalizedWidth) || !Number.isFinite(normalizedHeight)) return;
+  if (normalizedWidth <= 0 || normalizedHeight <= 0) return;
+
+  asset.width = normalizedWidth;
+  asset.height = normalizedHeight;
+  imgEl.width = normalizedWidth;
+  imgEl.height = normalizedHeight;
+  const aspectRatio = `${normalizedWidth} / ${normalizedHeight}`;
+  imgEl.style.aspectRatio = aspectRatio;
+
+  const cell = imgEl.parentElement;
+  if (cell instanceof HTMLElement) {
+    cell.style.aspectRatio = aspectRatio;
+  }
+}
+
 function loadThumbIntoElement(imgEl, asset, candidateIndex = 0) {
   const candidates = asset.resolvedThumbUrl
     ? [asset.resolvedThumbUrl, ...asset.thumbCandidates.filter((url) => url !== asset.resolvedThumbUrl)]
@@ -3002,6 +3039,12 @@ function loadThumbIntoElement(imgEl, asset, candidateIndex = 0) {
   const existing = galleryThumbLoadState.get(url);
   if (existing?.status === "loaded") {
     asset.resolvedThumbUrl = url;
+    applyGalleryElementDimensions(
+      imgEl,
+      asset,
+      existing.width || existing.image?.naturalWidth,
+      existing.height || existing.image?.naturalHeight
+    );
     imgEl.src = url;
     imgEl.dataset.galleryThumbHydrated = "true";
     imgEl.classList.add("isLoaded");
@@ -3011,7 +3054,10 @@ function loadThumbIntoElement(imgEl, asset, candidateIndex = 0) {
   const handleLoad = () => {
     imgEl.removeEventListener("error", handleError);
     asset.resolvedThumbUrl = url;
-    galleryThumbLoadState.set(url, { status: "loaded", image: null, promise: null });
+    const width = imgEl.naturalWidth || asset.width || GALLERY_DEFAULT_IMAGE_WIDTH;
+    const height = imgEl.naturalHeight || asset.height || GALLERY_DEFAULT_IMAGE_HEIGHT;
+    applyGalleryElementDimensions(imgEl, asset, width, height);
+    galleryThumbLoadState.set(url, { status: "loaded", image: null, promise: null, width, height });
     imgEl.dataset.galleryThumbHydrated = "true";
     imgEl.classList.add("isLoaded");
   };
