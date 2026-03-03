@@ -623,12 +623,22 @@ function setGalleryEntry(index, labels, nodeId, entry) {
   if (label && !labels.has(nodeId)) labels.set(nodeId, label);
 }
 
+function setGalleryLabel(labels, nodeId, entry) {
+  const label = getEntryLabel(entry);
+  if (label && !labels.has(nodeId)) labels.set(nodeId, label);
+}
+
 function buildRuntimeGalleryState(currentListing) {
   const index = new Map();
   const labels = new Map();
   const aliases = new Map();
 
   const explicit = currentListing?.galleriesByNode;
+  const hasExplicitGalleryData = !!(
+    explicit &&
+    typeof explicit === "object" &&
+    Object.keys(explicit).length
+  );
   if (explicit && typeof explicit === "object") {
     for (const [nodeIdRaw, entry] of Object.entries(explicit)) {
       const nodeId = Number(nodeIdRaw);
@@ -641,7 +651,12 @@ function buildRuntimeGalleryState(currentListing) {
   if (roomsById && typeof roomsById === "object") {
     for (const [nodeIdRaw, entry] of Object.entries(roomsById)) {
       const nodeId = Number(nodeIdRaw);
-      if (!Number.isFinite(nodeId) || nodeId < 0 || index.has(nodeId)) continue;
+      if (!Number.isFinite(nodeId) || nodeId < 0) continue;
+      if (hasExplicitGalleryData) {
+        setGalleryLabel(labels, nodeId, entry);
+        continue;
+      }
+      if (index.has(nodeId)) continue;
       setGalleryEntry(index, labels, nodeId, entry);
     }
   }
@@ -651,10 +666,16 @@ function buildRuntimeGalleryState(currentListing) {
   if (nodeKeyMap && roomsByKey && typeof nodeKeyMap === "object" && typeof roomsByKey === "object") {
     for (const [nodeIdRaw, roomKeyRaw] of Object.entries(nodeKeyMap)) {
       const nodeId = Number(nodeIdRaw);
-      if (!Number.isFinite(nodeId) || nodeId < 0 || index.has(nodeId)) continue;
+      if (!Number.isFinite(nodeId) || nodeId < 0) continue;
       const roomKey = String(roomKeyRaw || "").trim();
       if (!roomKey) continue;
-      setGalleryEntry(index, labels, nodeId, roomsByKey[roomKey]);
+      const entry = roomsByKey[roomKey];
+      if (hasExplicitGalleryData) {
+        setGalleryLabel(labels, nodeId, entry);
+        continue;
+      }
+      if (index.has(nodeId)) continue;
+      setGalleryEntry(index, labels, nodeId, entry);
     }
   }
 
@@ -1396,9 +1417,7 @@ function ensureTourInteractionUnlockHandlers() {
 }
 
 function getFolderGalleryLabelForNodeId(nodeId) {
-  const byNode = galleryFolderLabelsByListing.get(listingLookupKey);
-  if (!byNode) return "";
-  const label = byNode.get(Number(nodeId));
+  const label = galleryLabelsByNode.get(Number(nodeId));
   return typeof label === "string" && label.trim() ? label.trim() : "";
 }
 
@@ -1415,11 +1434,8 @@ function getGalleryLabelForNodeId(nodeId, roomEntry = null) {
 }
 
 function getRoomsWithGalleryPhotos() {
-  const byNode = galleryIndexByListing.get(listingLookupKey);
-  if (!byNode) return [];
-
   const rooms = [];
-  for (const [nodeId, urls] of byNode.entries()) {
+  for (const [nodeId, urls] of galleryIndexByNode.entries()) {
     if (!Array.isArray(urls) || urls.length === 0) continue;
     const nodeNum = Number(nodeId);
     if (!Number.isFinite(nodeNum) || nodeNum < 0) continue;
@@ -2366,19 +2382,28 @@ function preloadImages(urls) {
 }
 
 function getNodeGalleryImages(nodeId) {
-  const byNode = galleryIndexByListing.get(listingLookupKey);
-  if (!byNode) return [];
-  return byNode.get(Number(nodeId)) || [];
+  return galleryIndexByNode.get(Number(nodeId)) || [];
 }
 
 function hasGalleryPhotosForNode(nodeId) {
   return getNodeGalleryImages(nodeId).length > 0;
 }
 
+function getGalleryAliasNodeId(nodeId) {
+  const direct = galleryAliasByNode.get(Number(nodeId));
+  return Number.isFinite(direct) && direct >= 0 ? direct : null;
+}
+
 function applyExteriorGallery() {
-  if (!hasGalleryPhotosForNode(EXTERIOR_GALLERY_NODE_ID)) return false;
-  applyGalleryForNodeId(EXTERIOR_GALLERY_NODE_ID);
-  return true;
+  if (hasGalleryPhotosForNode(EXTERIOR_GALLERY_NODE_ID)) {
+    applyGalleryForNodeId(EXTERIOR_GALLERY_NODE_ID);
+    return true;
+  }
+  if (hasGalleryPhotosForNode(0)) {
+    applyGalleryForNodeId(0);
+    return true;
+  }
+  return false;
 }
 
 function findGalleryFallbackForNode(nodeId) {
@@ -2390,6 +2415,12 @@ function findGalleryFallbackForNode(nodeId) {
   for (let n = current; n >= 0; n--) {
     const urls = getNodeGalleryImages(n);
     if (urls.length) return { sourceNodeId: n, urls };
+
+    const aliasNodeId = getGalleryAliasNodeId(n);
+    if (Number.isFinite(aliasNodeId) && aliasNodeId >= 0) {
+      const aliasUrls = getNodeGalleryImages(aliasNodeId);
+      if (aliasUrls.length) return { sourceNodeId: aliasNodeId, urls: aliasUrls };
+    }
   }
 
   return { sourceNodeId: current, urls: [] };
@@ -2400,11 +2431,16 @@ function getSortedNodeIds() {
     .map((k) => Number(k))
     .filter((n) => Number.isFinite(n) && n >= 0);
 
-  const fromGalleries = Array.from(
-    galleryIndexByListing.get(listingLookupKey)?.keys() || []
-  ).filter((n) => Number.isFinite(n) && n >= 0);
+  const fromGalleries = Array.from(galleryIndexByNode.keys()).filter(
+    (n) => Number.isFinite(n) && n >= 0
+  );
+  const fromAliases = Array.from(galleryAliasByNode.keys()).filter(
+    (n) => Number.isFinite(n) && n >= 0
+  );
 
-  return Array.from(new Set([...fromListing, ...fromGalleries])).sort((a, b) => a - b);
+  return Array.from(new Set([...fromListing, ...fromGalleries, ...fromAliases])).sort(
+    (a, b) => a - b
+  );
 }
 
 function getInitialTourNodeId() {
@@ -2467,10 +2503,15 @@ async function loadListing() {
   const res = await fetch(`/listings/${listingId}.json`, { cache: "no-store" });
   if (!res.ok) throw new Error(`Listing not found: ${listingId}`);
   listing = await res.json();
+  const runtimeGalleryState = buildRuntimeGalleryState(listing);
+  galleryIndexByNode = runtimeGalleryState.index;
+  galleryLabelsByNode = runtimeGalleryState.labels;
+  galleryAliasByNode = runtimeGalleryState.aliases;
+  listingVideoSources = buildRuntimeVideoSources(listing);
 
   // Preload both floorplans (if provided) so switching is instant
-  if (listing?.floorplans?.down) preloadImage(listing.floorplans.down);
-  if (listing?.floorplans?.up) preloadImage(listing.floorplans.up);
+  if (listing?.floorplans?.down) preloadImage(resolveListingAssetUrl(listing.floorplans.down));
+  if (listing?.floorplans?.up) preloadImage(resolveListingAssetUrl(listing.floorplans.up));
   syncFloorplanLevelSelect("down");
 
   propTitle.textContent = listing.title || listingId;
