@@ -11,6 +11,7 @@ const tourFrameViewport = document.getElementById("tourFrameViewport");
 const tourFullscreenToggle = document.getElementById("tourFullscreenToggle");
 const tourFullscreenExit = document.getElementById("tourFullscreenExit");
 const layoutEl = document.querySelector(".layout");
+const topTabNav = document.querySelector(".topTabNav");
 const topTabButtons = Array.from(document.querySelectorAll(".topTabBtn[data-top-tab]"));
 const topTabSelect = document.getElementById("topTabSelect");
 const viewportMeta = document.querySelector('meta[name="viewport"]');
@@ -311,12 +312,47 @@ function restoreFloorplanFrameToSidebar() {
   sidebarFloorplanPanel.appendChild(sidebarFloorplanFrameEl);
 }
 
+function ensureTopTabIndicator() {
+  if (!topTabNav) return null;
+  if (topTabIndicatorEl?.isConnected) return topTabIndicatorEl;
+  topTabIndicatorEl = document.createElement("div");
+  topTabIndicatorEl.className = "topTabNavActivePill";
+  topTabIndicatorEl.setAttribute("aria-hidden", "true");
+  topTabNav.prepend(topTabIndicatorEl);
+  return topTabIndicatorEl;
+}
+
+function updateTopTabIndicator() {
+  const indicator = ensureTopTabIndicator();
+  if (!topTabNav || !indicator) return;
+
+  const navStyle = window.getComputedStyle(topTabNav);
+  if (navStyle.display === "none" || topTabNav.clientWidth <= 0) {
+    indicator.style.opacity = "0";
+    return;
+  }
+
+  const activeBtn = topTabButtons.find((btn) => btn.classList.contains("isActive"));
+  if (!activeBtn) {
+    indicator.style.opacity = "0";
+    return;
+  }
+
+  const x = activeBtn.offsetLeft - topTabNav.scrollLeft;
+  const y = activeBtn.offsetTop;
+  indicator.style.width = `${activeBtn.offsetWidth}px`;
+  indicator.style.height = `${activeBtn.offsetHeight}px`;
+  indicator.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+  indicator.style.opacity = "1";
+}
+
 function setTopTab(tab) {
   activeTopTab = tab;
   for (const btn of topTabButtons) {
     const isActive = (btn.dataset.topTab || "") === tab;
     btn.classList.toggle("isActive", isActive);
   }
+  updateTopTabIndicator();
   if (topTabSelect && topTabSelect.value !== tab) topTabSelect.value = tab;
 
   const isGalleryTab = tab === "gallery";
@@ -407,6 +443,13 @@ for (const btn of topTabButtons) {
     const tab = (btn.dataset.topTab || "tour").toLowerCase();
     setTopTab(tab);
   });
+}
+
+if (topTabNav) {
+  topTabNav.addEventListener("scroll", updateTopTabIndicator, { passive: true });
+  window.addEventListener("resize", updateTopTabIndicator);
+  window.addEventListener("load", updateTopTabIndicator, { once: true });
+  requestAnimationFrame(updateTopTabIndicator);
 }
 
 if (topTabSelect) {
@@ -509,6 +552,7 @@ let startupExteriorNodeZeroActivatedAt = 0;
 let galleryPreviewEl = null;
 let galleryPreviewTimer = null;
 let galleryPreviewPinned = false;
+let topTabIndicatorEl = null;
 let galleryMenuOpen = false;
 let galleryMenuBound = false;
 let openFloorplanLevelMenuKey = "";
