@@ -779,6 +779,27 @@ body.isFloorplanView {
   transition: opacity 180ms ease, transform 180ms ease;
 }
 
+.droneScrubberBuffering {
+  position: absolute;
+  right: 14px;
+  bottom: calc(100% + 10px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 22px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: rgba(46, 26, 71, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 8px 18px rgba(8, 11, 18, 0.3);
+  pointer-events: none;
+}
+
 .droneScrubberHint.isVisible {
   opacity: 1;
   transform: translateY(0);

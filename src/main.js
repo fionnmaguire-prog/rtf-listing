@@ -1158,7 +1158,8 @@ function renderInfoBlurb(blurb) {
 }
 
 const DRONE_SCRUB_SENSITIVITY = 0.55;
-const DRONE_SCRUB_SEEK_EPSILON = 1 / 120;
+const DRONE_SCRUB_FRAME_STEP = 5 / 24;
+const DRONE_SCRUB_SEEK_INTERVAL_MS = 60;
 
 function shouldPrimeScrubVideoSource() {
   const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
@@ -1212,6 +1213,7 @@ function isSidebarStackedPresentation() {
 function createVideoScrubberElement(src) {
   const wrap = document.createElement("div");
   wrap.className = "droneScrubber";
+  const scrubDebug = params.get("scrubDebug") === "1" || params.get("debug") === "1";
 
   const video = document.createElement("video");
   video.className = "droneScrubberVideo";
@@ -1240,6 +1242,12 @@ function createVideoScrubberElement(src) {
   hint.appendChild(hintArrow);
   hint.appendChild(hintText);
 
+  const bufferingState = document.createElement("div");
+  bufferingState.className = "droneScrubberBuffering";
+  bufferingState.textContent = "Buffering";
+  bufferingState.hidden = true;
+  bufferingState.setAttribute("aria-hidden", "true");
+
   const range = document.createElement("input");
   range.className = "droneScrubberRange";
   range.type = "range";
@@ -1263,8 +1271,37 @@ function createVideoScrubberElement(src) {
     return Math.max(0, Math.min(value / DRONE_SCRUB_SENSITIVITY, getScrubRangeMax(duration)));
   };
 
+  const quantizeSeekTime = (value, duration) => {
+    if (!duration) return 0;
+    const clamped = Math.max(0, Math.min(value, duration));
+    const quantized = Math.round(clamped / DRONE_SCRUB_FRAME_STEP) * DRONE_SCRUB_FRAME_STEP;
+    return Math.max(0, Math.min(quantized, duration));
+  };
+
   const syncRangeValue = (value) => {
     range.value = String(Math.max(0, value));
+  };
+
+  const getBufferedRanges = () => {
+    const ranges = [];
+    const buffered = video.buffered;
+    if (!buffered) return ranges;
+    for (let i = 0; i < buffered.length; i++) {
+      ranges.push([buffered.start(i), buffered.end(i)]);
+    }
+    return ranges;
+  };
+
+  const logScrub = (message, extra = {}) => {
+    if (!scrubDebug) return;
+    console.log("[listing][scrub]", message, {
+      src,
+      currentTime: Number.isFinite(video.currentTime) ? video.currentTime : 0,
+      duration: Number.isFinite(video.duration) ? video.duration : 0,
+      buffered: getBufferedRanges(),
+      stallCount,
+      ...extra
+    });
   };
 
   const syncUi = () => {
@@ -1283,53 +1320,137 @@ function createVideoScrubberElement(src) {
     }
   };
 
-  let pendingSeekTime = null;
-  let seekInFlight = false;
-  let pendingExactSeek = false;
-  let seekRafId = 0;
+  let pendingSeekTime = NaN;
+  let appliedSeekTime = NaN;
+  let currentSeekTarget = NaN;
+  let isSeeking = false;
+  let seekTimerId = 0;
+  let lastSeekStartedAt = 0;
   let isDraggingRange = false;
+  let forceExactOnNextSeek = false;
+  let decoderWarmed = false;
+  let stallCount = 0;
+  let isBufferWaiting = false;
 
-  const flushPendingSeek = () => {
+  const setBufferWaiting = (nextState) => {
+    const active = Boolean(nextState);
+    if (isBufferWaiting === active) return;
+    isBufferWaiting = active;
+    bufferingState.hidden = !active;
+    bufferingState.setAttribute("aria-hidden", active ? "false" : "true");
+    wrap.classList.toggle("isBuffering", active);
+    logScrub(active ? "buffer-wait-start" : "buffer-wait-end", {
+      pendingSeekTime,
+      appliedSeekTime
+    });
+  };
+
+  const clearQueuedSeekTimer = () => {
+    if (!seekTimerId) return;
+    clearTimeout(seekTimerId);
+    seekTimerId = 0;
+  };
+
+  const warmDecoder = () => {
+    if (decoderWarmed) return;
+    decoderWarmed = true;
+    try {
+      const playPromise = video.play();
+      if (playPromise && typeof playPromise.then === "function") {
+        playPromise
+          .then(() => {
+            video.pause();
+            logScrub("decoder-warmed");
+          })
+          .catch((error) => {
+            logScrub("decoder-warm-failed", { error: String(error?.message || error || "") });
+          });
+      } else {
+        video.pause();
+        logScrub("decoder-warmed");
+      }
+    } catch (error) {
+      logScrub("decoder-warm-failed", { error: String(error?.message || error || "") });
+    }
+  };
+
+  const isTimeBuffered = (targetTime, tolerance = 0.25) => {
+    const buffered = video.buffered;
+    if (!buffered) return false;
+    for (let i = 0; i < buffered.length; i++) {
+      const start = buffered.start(i) - tolerance;
+      const end = buffered.end(i) + tolerance;
+      if (targetTime >= start && targetTime <= end) return true;
+    }
+    return false;
+  };
+
+  const startSeek = (targetTime, exact = false) => {
     const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 0;
-    if (!duration || !Number.isFinite(pendingSeekTime)) return;
-    if (seekInFlight) return;
+    if (!duration) return;
 
-    const target = Math.max(0, Math.min(pendingSeekTime, duration));
-    if (Math.abs(target - video.currentTime) <= DRONE_SCRUB_SEEK_EPSILON) {
-      pendingExactSeek = false;
+    const target = quantizeSeekTime(targetTime, duration);
+    if (Number.isFinite(appliedSeekTime) && Math.abs(target - appliedSeekTime) <= DRONE_SCRUB_FRAME_STEP / 2) {
       return;
     }
 
-    seekInFlight = true;
-    const exactSeek = pendingExactSeek || !isDraggingRange;
-    pendingExactSeek = false;
+    currentSeekTarget = target;
+    isSeeking = true;
+    lastSeekStartedAt = performance.now();
+    warmDecoder();
+    logScrub("seek-start", { target, exact });
 
     try {
-      if (!exactSeek && typeof video.fastSeek === "function") {
+      if (!exact && typeof video.fastSeek === "function") {
         video.fastSeek(target);
       } else {
         video.currentTime = target;
       }
-    } catch {
-      seekInFlight = false;
+    } catch (error) {
+      isSeeking = false;
+      logScrub("seek-error", { target, exact, error: String(error?.message || error || "") });
     }
   };
 
-  const scheduleSeekFlush = () => {
-    if (seekRafId) return;
-    seekRafId = requestAnimationFrame(() => {
-      seekRafId = 0;
-      flushPendingSeek();
-    });
+  const pumpSeekQueue = (force = false) => {
+    const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 0;
+    if (!duration || !Number.isFinite(pendingSeekTime)) return;
+    if (isSeeking) return;
+
+    const target = quantizeSeekTime(pendingSeekTime, duration);
+    if (Number.isFinite(appliedSeekTime) && Math.abs(target - appliedSeekTime) <= DRONE_SCRUB_FRAME_STEP / 2) {
+      setBufferWaiting(false);
+      return;
+    }
+
+    if (!isTimeBuffered(target, 0.25)) {
+      setBufferWaiting(true);
+      return;
+    }
+
+    clearQueuedSeekTimer();
+    const elapsed = performance.now() - lastSeekStartedAt;
+    if (!force && elapsed < DRONE_SCRUB_SEEK_INTERVAL_MS) {
+      seekTimerId = window.setTimeout(() => {
+        seekTimerId = 0;
+        pumpSeekQueue(forceExactOnNextSeek);
+      }, DRONE_SCRUB_SEEK_INTERVAL_MS - elapsed);
+      return;
+    }
+
+    const exact = force || forceExactOnNextSeek;
+    forceExactOnNextSeek = false;
+    setBufferWaiting(false);
+    startSeek(target, exact);
   };
 
   const queueSeekToRangeValue = (rawValue, exact = false) => {
     const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 0;
     const next = Number(rawValue);
     if (!Number.isFinite(next) || !duration) return;
-    pendingSeekTime = rangeValueToTime(next, duration);
-    if (exact) pendingExactSeek = true;
-    scheduleSeekFlush();
+    pendingSeekTime = quantizeSeekTime(rangeValueToTime(next, duration), duration);
+    if (exact) forceExactOnNextSeek = true;
+    pumpSeekQueue(exact);
   };
 
   const finishDragSeek = () => {
@@ -1340,12 +1461,14 @@ function createVideoScrubberElement(src) {
 
   range.addEventListener("pointerdown", () => {
     isDraggingRange = true;
+    warmDecoder();
   });
   range.addEventListener("pointerup", finishDragSeek);
   range.addEventListener("pointercancel", finishDragSeek);
   range.addEventListener("change", finishDragSeek);
   range.addEventListener("input", () => {
     isDraggingRange = true;
+    warmDecoder();
     queueSeekToRangeValue(range.value, false);
   });
 
@@ -1436,29 +1559,45 @@ function createVideoScrubberElement(src) {
       const startTime = Math.min(0.01, duration);
       video.currentTime = startTime;
       syncRangeValue(timeToRangeValue(startTime, duration));
+      appliedSeekTime = quantizeSeekTime(startTime, duration);
     }
     keepPaused();
+    logScrub("loadedmetadata");
   });
   video.addEventListener("loadeddata", keepPaused);
   video.addEventListener("canplay", keepPaused);
   video.addEventListener("seeked", () => {
-    seekInFlight = false;
+    isSeeking = false;
+    appliedSeekTime = Number.isFinite(currentSeekTarget)
+      ? currentSeekTarget
+      : quantizeSeekTime(video.currentTime || 0, video.duration || 0);
     keepPaused();
-    if (
-      Number.isFinite(pendingSeekTime) &&
-      Math.abs(pendingSeekTime - video.currentTime) > DRONE_SCRUB_SEEK_EPSILON
-    ) {
-      scheduleSeekFlush();
+    logScrub("seeked", { appliedSeekTime, pendingSeekTime });
+    if (Number.isFinite(pendingSeekTime) && Math.abs(pendingSeekTime - appliedSeekTime) > DRONE_SCRUB_FRAME_STEP / 2) {
+      pumpSeekQueue(true);
     }
   });
-  video.addEventListener("timeupdate", syncUi);
+  video.addEventListener("progress", () => {
+    if (!isBufferWaiting) return;
+    pumpSeekQueue(forceExactOnNextSeek);
+  });
+  video.addEventListener("waiting", () => {
+    stallCount += 1;
+    logScrub("waiting");
+  });
+  video.addEventListener("stalled", () => {
+    stallCount += 1;
+    logScrub("stalled");
+  });
   video.addEventListener("play", keepPaused);
   video.addEventListener("click", (event) => {
     event.preventDefault();
+    warmDecoder();
     keepPaused();
   });
 
   controls.appendChild(hint);
+  controls.appendChild(bufferingState);
   controls.appendChild(range);
   wrap.appendChild(video);
   wrap.appendChild(controls);
