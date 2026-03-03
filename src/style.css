@@ -1788,6 +1788,17 @@ object.floorplanSvg,
   user-select: none;
   pointer-events: none;              /* ✅ prevents iframe/object stealing drag */
 }
+
+#floorplan.floorplanSvg > svg,
+#floorplan.floorplanSvg > img.floorplanSvgFallback {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  user-select: none;
+  pointer-events: none;
+}
 /* Bottom-right zoom controls */
 .floorplanZoomUI {
   position: absolute;
