@@ -781,6 +781,10 @@ function normalizeGalleryAsset(value, index = 0) {
   let rawMedium = "";
   let rawFull = "";
   let rawOriginal = "";
+  let rawFallbackThumb = "";
+  let rawFallbackMedium = "";
+  let rawFallbackFull = "";
+  let rawFallbackOriginal = "";
   let width = GALLERY_DEFAULT_IMAGE_WIDTH;
   let height = GALLERY_DEFAULT_IMAGE_HEIGHT;
 
@@ -812,31 +816,72 @@ function normalizeGalleryAsset(value, index = 0) {
             : typeof value.url === "string"
               ? value.url.trim()
               : "";
+    rawFallbackThumb =
+      typeof value.fallbackThumb === "string"
+        ? value.fallbackThumb.trim()
+        : typeof value.thumbFallback === "string"
+          ? value.thumbFallback.trim()
+          : "";
+    rawFallbackMedium =
+      typeof value.fallbackMedium === "string"
+        ? value.fallbackMedium.trim()
+        : typeof value.mediumFallback === "string"
+          ? value.mediumFallback.trim()
+          : "";
+    rawFallbackFull =
+      typeof value.fallbackFull === "string"
+        ? value.fallbackFull.trim()
+        : typeof value.fullFallback === "string"
+          ? value.fullFallback.trim()
+          : "";
+    rawFallbackOriginal =
+      typeof value.fallbackOriginal === "string"
+        ? value.fallbackOriginal.trim()
+        : typeof value.originalFallback === "string"
+          ? value.originalFallback.trim()
+          : "";
     rawOriginal = rawFull || rawMedium || rawThumb;
     width = normalizeImageDimensionValue(value.width, width);
     height = normalizeImageDimensionValue(value.height, height);
   }
 
   const baseSource = rawOriginal || rawFull || rawMedium || rawThumb;
+  const fallbackSource = rawFallbackOriginal || rawFallbackFull || rawFallbackMedium || rawFallbackThumb;
   const derivedThumb = rawThumb || deriveSizedGalleryAssetPath(baseSource, "thumb");
   const derivedMedium = rawMedium || deriveSizedGalleryAssetPath(baseSource || rawFull, "medium");
   const derivedFull = rawFull || deriveSizedGalleryAssetPath(baseSource, "full");
 
   const thumbCandidates = dedupeUrls(
-    [derivedThumb, deriveSizedGalleryAssetPath(derivedFull || baseSource, "thumb"), baseSource].map(
-      resolveListingAssetUrl
-    )
+    [
+      derivedThumb,
+      deriveSizedGalleryAssetPath(derivedFull || baseSource, "thumb"),
+      rawFallbackThumb,
+      deriveSizedGalleryAssetPath(rawFallbackFull || fallbackSource, "thumb"),
+      fallbackSource,
+      baseSource
+    ].map(resolveListingAssetUrl)
   );
   const mediumCandidates = dedupeUrls(
-    [derivedMedium, deriveSizedGalleryAssetPath(derivedFull || baseSource, "medium"), derivedFull, baseSource].map(
-      resolveListingAssetUrl
-    )
+    [
+      derivedMedium,
+      deriveSizedGalleryAssetPath(derivedFull || baseSource, "medium"),
+      rawFallbackMedium,
+      deriveSizedGalleryAssetPath(rawFallbackFull || fallbackSource, "medium"),
+      rawFallbackFull,
+      derivedFull,
+      fallbackSource,
+      baseSource
+    ].map(resolveListingAssetUrl)
   );
   const fullCandidates = dedupeUrls(
     [
       derivedFull,
       deriveSizedGalleryAssetPath(derivedFull || baseSource, "full"),
       derivedMedium,
+      rawFallbackFull,
+      rawFallbackMedium,
+      rawFallbackThumb,
+      fallbackSource,
       baseSource,
       derivedThumb
     ].map(resolveListingAssetUrl)

@@ -140,20 +140,20 @@
       "label": "Exterior",
       "gallery": [
         {
-          "thumb": "galleries/room_000_exterior/thumb/001.jpg",
-          "full": "galleries/room_000_exterior/full/001.jpg"
+          "thumb": "galleries/room_000_exterior/thumb/001.webp",
+          "full": "galleries/room_000_exterior/full/001.webp"
         },
         {
-          "thumb": "galleries/room_000_exterior/thumb/002.jpg",
-          "full": "galleries/room_000_exterior/full/002.jpg"
+          "thumb": "galleries/room_000_exterior/thumb/002.webp",
+          "full": "galleries/room_000_exterior/full/002.webp"
         },
         {
-          "thumb": "galleries/room_000_exterior/thumb/003.jpg",
-          "full": "galleries/room_000_exterior/full/003.jpg"
+          "thumb": "galleries/room_000_exterior/thumb/003.webp",
+          "full": "galleries/room_000_exterior/full/003.webp"
         },
         {
-          "thumb": "galleries/room_000_exterior/thumb/004.jpg",
-          "full": "galleries/room_000_exterior/full/004.jpg"
+          "thumb": "galleries/room_000_exterior/thumb/004.webp",
+          "full": "galleries/room_000_exterior/full/004.webp"
         }
       ]
     },
@@ -161,20 +161,20 @@
       "label": "Living",
       "gallery": [
         {
-          "thumb": "galleries/room_001_living/thumb/001.jpg",
-          "full": "galleries/room_001_living/full/001.jpg"
+          "thumb": "galleries/room_001_living/thumb/001.webp",
+          "full": "galleries/room_001_living/full/001.webp"
         },
         {
-          "thumb": "galleries/room_001_living/thumb/002.jpg",
-          "full": "galleries/room_001_living/full/002.jpg"
+          "thumb": "galleries/room_001_living/thumb/002.webp",
+          "full": "galleries/room_001_living/full/002.webp"
         },
         {
-          "thumb": "galleries/room_001_living/thumb/003.jpg",
-          "full": "galleries/room_001_living/full/003.jpg"
+          "thumb": "galleries/room_001_living/thumb/003.webp",
+          "full": "galleries/room_001_living/full/003.webp"
         },
         {
-          "thumb": "galleries/room_001_living/thumb/004.jpg",
-          "full": "galleries/room_001_living/full/004.jpg"
+          "thumb": "galleries/room_001_living/thumb/004.webp",
+          "full": "galleries/room_001_living/full/004.webp"
         }
       ]
     },
@@ -182,8 +182,8 @@
       "label": "Guestbath",
       "gallery": [
         {
-          "thumb": "galleries/room_003_guestbath/thumb/001.jpg",
-          "full": "galleries/room_003_guestbath/full/001.jpg"
+          "thumb": "galleries/room_003_guestbath/thumb/001.webp",
+          "full": "galleries/room_003_guestbath/full/001.webp"
         }
       ]
     },
@@ -191,12 +191,12 @@
       "label": "Guestbed",
       "gallery": [
         {
-          "thumb": "galleries/room_004_guestbed/thumb/001.jpg",
-          "full": "galleries/room_004_guestbed/full/001.jpg"
+          "thumb": "galleries/room_004_guestbed/thumb/001.webp",
+          "full": "galleries/room_004_guestbed/full/001.webp"
         },
         {
-          "thumb": "galleries/room_004_guestbed/thumb/002.jpg",
-          "full": "galleries/room_004_guestbed/full/002.jpg"
+          "thumb": "galleries/room_004_guestbed/thumb/002.webp",
+          "full": "galleries/room_004_guestbed/full/002.webp"
         }
       ]
     },
@@ -204,20 +204,20 @@
       "label": "Kitchen",
       "gallery": [
         {
-          "thumb": "galleries/room_005_kitchen/thumb/001.jpg",
-          "full": "galleries/room_005_kitchen/full/001.jpg"
+          "thumb": "galleries/room_005_kitchen/thumb/001.webp",
+          "full": "galleries/room_005_kitchen/full/001.webp"
         },
         {
-          "thumb": "galleries/room_005_kitchen/thumb/002.jpg",
-          "full": "galleries/room_005_kitchen/full/002.jpg"
+          "thumb": "galleries/room_005_kitchen/thumb/002.webp",
+          "full": "galleries/room_005_kitchen/full/002.webp"
         },
         {
-          "thumb": "galleries/room_005_kitchen/thumb/003.jpg",
-          "full": "galleries/room_005_kitchen/full/003.jpg"
+          "thumb": "galleries/room_005_kitchen/thumb/003.webp",
+          "full": "galleries/room_005_kitchen/full/003.webp"
         },
         {
-          "thumb": "galleries/room_005_kitchen/thumb/004.jpg",
-          "full": "galleries/room_005_kitchen/full/004.jpg"
+          "thumb": "galleries/room_005_kitchen/thumb/004.webp",
+          "full": "galleries/room_005_kitchen/full/004.webp"
         }
       ]
     },
@@ -225,16 +225,16 @@
       "label": "Stairs",
       "gallery": [
         {
-          "thumb": "galleries/room_010_stairs/thumb/001.jpg",
-          "full": "galleries/room_010_stairs/full/001.jpg"
+          "thumb": "galleries/room_010_stairs/thumb/001.webp",
+          "full": "galleries/room_010_stairs/full/001.webp"
         },
         {
-          "thumb": "galleries/room_010_stairs/thumb/002.jpg",
-          "full": "galleries/room_010_stairs/full/002.jpg"
+          "thumb": "galleries/room_010_stairs/thumb/002.webp",
+          "full": "galleries/room_010_stairs/full/002.webp"
         },
         {
-          "thumb": "galleries/room_010_stairs/thumb/003.jpg",
-          "full": "galleries/room_010_stairs/full/003.jpg"
+          "thumb": "galleries/room_010_stairs/thumb/003.webp",
+          "full": "galleries/room_010_stairs/full/003.webp"
         }
       ]
     },
@@ -242,12 +242,12 @@
       "label": "Office",
       "gallery": [
         {
-          "thumb": "galleries/room_013_office/thumb/001.jpg",
-          "full": "galleries/room_013_office/full/001.jpg"
+          "thumb": "galleries/room_013_office/thumb/001.webp",
+          "full": "galleries/room_013_office/full/001.webp"
         },
         {
-          "thumb": "galleries/room_013_office/thumb/002.jpg",
-          "full": "galleries/room_013_office/full/002.jpg"
+          "thumb": "galleries/room_013_office/thumb/002.webp",
+          "full": "galleries/room_013_office/full/002.webp"
         }
       ]
     },
@@ -255,20 +255,20 @@
       "label": "Masterbed",
       "gallery": [
         {
-          "thumb": "galleries/room_014_masterbed/thumb/001.jpg",
-          "full": "galleries/room_014_masterbed/full/001.jpg"
+          "thumb": "galleries/room_014_masterbed/thumb/001.webp",
+          "full": "galleries/room_014_masterbed/full/001.webp"
         },
         {
-          "thumb": "galleries/room_014_masterbed/thumb/002.jpg",
-          "full": "galleries/room_014_masterbed/full/002.jpg"
+          "thumb": "galleries/room_014_masterbed/thumb/002.webp",
+          "full": "galleries/room_014_masterbed/full/002.webp"
         },
         {
-          "thumb": "galleries/room_014_masterbed/thumb/003.jpg",
-          "full": "galleries/room_014_masterbed/full/003.jpg"
+          "thumb": "galleries/room_014_masterbed/thumb/003.webp",
+          "full": "galleries/room_014_masterbed/full/003.webp"
         },
         {
-          "thumb": "galleries/room_014_masterbed/thumb/004.jpg",
-          "full": "galleries/room_014_masterbed/full/004.jpg"
+          "thumb": "galleries/room_014_masterbed/thumb/004.webp",
+          "full": "galleries/room_014_masterbed/full/004.webp"
         }
       ]
     },
@@ -276,12 +276,12 @@
       "label": "Masterbath",
       "gallery": [
         {
-          "thumb": "galleries/room_016_masterbath/thumb/001.jpg",
-          "full": "galleries/room_016_masterbath/full/001.jpg"
+          "thumb": "galleries/room_016_masterbath/thumb/001.webp",
+          "full": "galleries/room_016_masterbath/full/001.webp"
         },
         {
-          "thumb": "galleries/room_016_masterbath/thumb/002.jpg",
-          "full": "galleries/room_016_masterbath/full/002.jpg"
+          "thumb": "galleries/room_016_masterbath/thumb/002.webp",
+          "full": "galleries/room_016_masterbath/full/002.webp"
         }
       ]
     },
@@ -289,8 +289,8 @@
       "label": "Guestbath",
       "gallery": [
         {
-          "thumb": "galleries/room_018_guestbath/thumb/001.jpg",
-          "full": "galleries/room_018_guestbath/full/001.jpg"
+          "thumb": "galleries/room_018_guestbath/thumb/001.webp",
+          "full": "galleries/room_018_guestbath/full/001.webp"
         }
       ]
     },
@@ -298,12 +298,12 @@
       "label": "Guestbed",
       "gallery": [
         {
-          "thumb": "galleries/room_019_guestbed/thumb/001.jpg",
-          "full": "galleries/room_019_guestbed/full/001.jpg"
+          "thumb": "galleries/room_019_guestbed/thumb/001.webp",
+          "full": "galleries/room_019_guestbed/full/001.webp"
         },
         {
-          "thumb": "galleries/room_019_guestbed/thumb/002.jpg",
-          "full": "galleries/room_019_guestbed/full/002.jpg"
+          "thumb": "galleries/room_019_guestbed/thumb/002.webp",
+          "full": "galleries/room_019_guestbed/full/002.webp"
         }
       ]
     },
@@ -311,12 +311,12 @@
       "label": "Guestbed",
       "gallery": [
         {
-          "thumb": "galleries/room_020_guestbed/thumb/001.jpg",
-          "full": "galleries/room_020_guestbed/full/001.jpg"
+          "thumb": "galleries/room_020_guestbed/thumb/001.webp",
+          "full": "galleries/room_020_guestbed/full/001.webp"
         },
         {
-          "thumb": "galleries/room_020_guestbed/thumb/002.jpg",
-          "full": "galleries/room_020_guestbed/full/002.jpg"
+          "thumb": "galleries/room_020_guestbed/thumb/002.webp",
+          "full": "galleries/room_020_guestbed/full/002.webp"
         }
       ]
     },
@@ -324,20 +324,20 @@
       "label": "Exterior",
       "gallery": [
         {
-          "thumb": "galleries/room_022_Exterior/thumb/001.jpg",
-          "full": "galleries/room_022_Exterior/full/001.jpg"
+          "thumb": "galleries/room_022_Exterior/thumb/001.webp",
+          "full": "galleries/room_022_Exterior/full/001.webp"
         },
         {
-          "thumb": "galleries/room_022_Exterior/thumb/002.jpg",
-          "full": "galleries/room_022_Exterior/full/002.jpg"
+          "thumb": "galleries/room_022_Exterior/thumb/002.webp",
+          "full": "galleries/room_022_Exterior/full/002.webp"
         },
         {
-          "thumb": "galleries/room_022_Exterior/thumb/003.jpg",
-          "full": "galleries/room_022_Exterior/full/003.jpg"
+          "thumb": "galleries/room_022_Exterior/thumb/003.webp",
+          "full": "galleries/room_022_Exterior/full/003.webp"
         },
         {
-          "thumb": "galleries/room_022_Exterior/thumb/004.jpg",
-          "full": "galleries/room_022_Exterior/full/004.jpg"
+          "thumb": "galleries/room_022_Exterior/thumb/004.webp",
+          "full": "galleries/room_022_Exterior/full/004.webp"
         }
       ]
     },
@@ -345,20 +345,20 @@
       "label": "Exterior",
       "gallery": [
         {
-          "thumb": "galleries/room_100_exterior/thumb/001.jpg",
-          "full": "galleries/room_100_exterior/full/001.jpg"
+          "thumb": "galleries/room_100_exterior/thumb/001.webp",
+          "full": "galleries/room_100_exterior/full/001.webp"
         },
         {
-          "thumb": "galleries/room_100_exterior/thumb/002.jpg",
-          "full": "galleries/room_100_exterior/full/002.jpg"
+          "thumb": "galleries/room_100_exterior/thumb/002.webp",
+          "full": "galleries/room_100_exterior/full/002.webp"
         },
         {
-          "thumb": "galleries/room_100_exterior/thumb/003.jpg",
-          "full": "galleries/room_100_exterior/full/003.jpg"
+          "thumb": "galleries/room_100_exterior/thumb/003.webp",
+          "full": "galleries/room_100_exterior/full/003.webp"
         },
         {
-          "thumb": "galleries/room_100_exterior/thumb/004.jpg",
-          "full": "galleries/room_100_exterior/full/004.jpg"
+          "thumb": "galleries/room_100_exterior/thumb/004.webp",
+          "full": "galleries/room_100_exterior/full/004.webp"
         }
       ]
     }
