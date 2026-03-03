@@ -127,6 +127,7 @@ let galleryIndexByNode = new Map();
 let galleryLabelsByNode = new Map();
 let galleryAliasByNode = new Map();
 let listingVideoSources = { scrub: [], drone: [] };
+let currentDroneVideos = [];
 const GALLERY_DEFERRED_APPLY_MS = 220;
 const GALLERY_THUMB_ROOT_MARGIN = "300px";
 const GALLERY_DEFAULT_IMAGE_WIDTH = 900;
@@ -282,6 +283,7 @@ function setSidebarTab(tab) {
   if (!sidebarEl) return;
   if (tab === "drone") sidebarEl.classList.add("isDrone");
   else sidebarEl.classList.remove("isDrone");
+  syncRenderedDroneMedia();
 
   if (tab === "drone") {
     requestAnimationFrame(() => {
@@ -343,6 +345,7 @@ function setTopTab(tab) {
   if (tourFrame) tourFrame.hidden = isOverlayTab;
   if (tourFrameViewport) tourFrameViewport.hidden = isOverlayTab;
   if (sidebarEl) sidebarEl.hidden = isOverlayTab;
+  syncRenderedDroneMedia();
   syncTourFullscreenUi();
 
   if (isFloorplanTab) {
@@ -513,6 +516,7 @@ let activeVideoMode = "scrub";
 let openVideoModeMenuKey = "";
 let videoModeMenuBound = false;
 let tourInteractionUnlockBound = false;
+const scrubVideoPrimeCache = new Map();
 const tourFrameScaleState = {
   baseWidth: 0,
   baseHeight: 0,
@@ -1120,6 +1124,56 @@ function renderInfoBlurb(blurb) {
 }
 
 const DRONE_SCRUB_SENSITIVITY = 0.55;
+const DRONE_SCRUB_SEEK_EPSILON = 1 / 120;
+
+function shouldPrimeScrubVideoSource() {
+  const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  if (connection?.saveData) return false;
+  const effectiveType = String(connection?.effectiveType || "").toLowerCase();
+  if (effectiveType === "slow-2g" || effectiveType === "2g") return false;
+  return true;
+}
+
+function primeScrubVideoSource(src) {
+  const normalizedSrc = typeof src === "string" ? src.trim() : "";
+  if (!normalizedSrc || !shouldPrimeScrubVideoSource()) return null;
+
+  const existing = scrubVideoPrimeCache.get(normalizedSrc);
+  if (existing) return existing.video;
+
+  const video = document.createElement("video");
+  video.preload = "auto";
+  video.muted = true;
+  video.playsInline = true;
+  video.src = normalizedSrc;
+  video.setAttribute("aria-hidden", "true");
+  video.setAttribute("tabindex", "-1");
+
+  video.addEventListener(
+    "loadedmetadata",
+    () => {
+      if (!Number.isFinite(video.duration) || video.duration <= 0) return;
+      try {
+        video.currentTime = Math.min(0.01, video.duration);
+      } catch {}
+    },
+    { once: true }
+  );
+
+  try {
+    video.load();
+  } catch {}
+
+  scrubVideoPrimeCache.set(normalizedSrc, { video });
+  return video;
+}
+
+function isSidebarStackedPresentation() {
+  const width = window.innerWidth || document.documentElement.clientWidth || 0;
+  const height = window.innerHeight || document.documentElement.clientHeight || 0;
+  if (width <= 900) return true;
+  return width > 900 && height <= 760;
+}
 
 function createVideoScrubberElement(src) {
   const wrap = document.createElement("div");
@@ -1129,11 +1183,12 @@ function createVideoScrubberElement(src) {
   video.className = "droneScrubberVideo";
   video.controls = false;
   video.playsInline = true;
-  video.preload = "metadata";
+  video.preload = "auto";
   video.muted = true;
   video.src = src;
   video.setAttribute("controlslist", "nodownload noplaybackrate noremoteplayback nofullscreen");
   video.disablePictureInPicture = true;
+  primeScrubVideoSource(src);
 
   const controls = document.createElement("div");
   controls.className = "droneScrubberControls";
@@ -1185,18 +1240,79 @@ function createVideoScrubberElement(src) {
       const rangeMax = getScrubRangeMax(duration);
       if (range.max !== String(rangeMax)) range.max = String(rangeMax);
       range.disabled = false;
-      syncRangeValue(timeToRangeValue(Math.min(current, duration), duration));
+      if (!isDraggingRange) {
+        syncRangeValue(timeToRangeValue(Math.min(current, duration), duration));
+      }
     } else {
       range.disabled = true;
       syncRangeValue(0);
     }
   };
 
-  range.addEventListener("input", () => {
+  let pendingSeekTime = null;
+  let seekInFlight = false;
+  let pendingExactSeek = false;
+  let seekRafId = 0;
+  let isDraggingRange = false;
+
+  const flushPendingSeek = () => {
     const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 0;
-    const next = Number(range.value);
+    if (!duration || !Number.isFinite(pendingSeekTime)) return;
+    if (seekInFlight) return;
+
+    const target = Math.max(0, Math.min(pendingSeekTime, duration));
+    if (Math.abs(target - video.currentTime) <= DRONE_SCRUB_SEEK_EPSILON) {
+      pendingExactSeek = false;
+      return;
+    }
+
+    seekInFlight = true;
+    const exactSeek = pendingExactSeek || !isDraggingRange;
+    pendingExactSeek = false;
+
+    try {
+      if (!exactSeek && typeof video.fastSeek === "function") {
+        video.fastSeek(target);
+      } else {
+        video.currentTime = target;
+      }
+    } catch {
+      seekInFlight = false;
+    }
+  };
+
+  const scheduleSeekFlush = () => {
+    if (seekRafId) return;
+    seekRafId = requestAnimationFrame(() => {
+      seekRafId = 0;
+      flushPendingSeek();
+    });
+  };
+
+  const queueSeekToRangeValue = (rawValue, exact = false) => {
+    const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 0;
+    const next = Number(rawValue);
     if (!Number.isFinite(next) || !duration) return;
-    video.currentTime = rangeValueToTime(next, duration);
+    pendingSeekTime = rangeValueToTime(next, duration);
+    if (exact) pendingExactSeek = true;
+    scheduleSeekFlush();
+  };
+
+  const finishDragSeek = () => {
+    if (!isDraggingRange) return;
+    isDraggingRange = false;
+    queueSeekToRangeValue(range.value, true);
+  };
+
+  range.addEventListener("pointerdown", () => {
+    isDraggingRange = true;
+  });
+  range.addEventListener("pointerup", finishDragSeek);
+  range.addEventListener("pointercancel", finishDragSeek);
+  range.addEventListener("change", finishDragSeek);
+  range.addEventListener("input", () => {
+    isDraggingRange = true;
+    queueSeekToRangeValue(range.value, false);
   });
 
   let revealHintTimer = 0;
@@ -1291,7 +1407,16 @@ function createVideoScrubberElement(src) {
   });
   video.addEventListener("loadeddata", keepPaused);
   video.addEventListener("canplay", keepPaused);
-  video.addEventListener("seeked", keepPaused);
+  video.addEventListener("seeked", () => {
+    seekInFlight = false;
+    keepPaused();
+    if (
+      Number.isFinite(pendingSeekTime) &&
+      Math.abs(pendingSeekTime - video.currentTime) > DRONE_SCRUB_SEEK_EPSILON
+    ) {
+      scheduleSeekFlush();
+    }
+  });
   video.addEventListener("timeupdate", syncUi);
   video.addEventListener("play", keepPaused);
   video.addEventListener("click", (event) => {
@@ -1425,6 +1550,47 @@ function getResolvedListingVideoSources(videos) {
   };
 }
 
+function clearMountedMedia(container) {
+  if (!container) return;
+  container.innerHTML = "";
+  delete container.dataset.mediaKey;
+}
+
+function mountResolvedMedia(container, src, mode) {
+  if (!container) return;
+  const normalizedSrc = typeof src === "string" ? src.trim() : "";
+  if (!normalizedSrc) {
+    clearMountedMedia(container);
+    return;
+  }
+
+  const mediaKey = `${normalizeVideoMode(mode)}:${normalizedSrc}`;
+  if (container.dataset.mediaKey === mediaKey && container.childElementCount > 0) return;
+
+  const media = createVideoMediaElement(normalizedSrc, mode);
+  if (!media) {
+    clearMountedMedia(container);
+    return;
+  }
+
+  container.dataset.mediaKey = mediaKey;
+  mountMediaWhenReady(container, media);
+}
+
+function syncRenderedDroneMedia() {
+  const sources = getResolvedListingVideoSources(currentDroneVideos);
+  const mode = normalizeVideoMode(activeVideoMode);
+  const selectedSrc = mode === "drone" ? sources.drone : sources.scrub;
+  const showSidebarMedia = activeTopTab === "tour" && (activeTab === "drone" || isSidebarStackedPresentation());
+  const showVideosPageMedia = activeTopTab === "videos";
+
+  if (showSidebarMedia) mountResolvedMedia(droneGrid, selectedSrc, mode);
+  else clearMountedMedia(droneGrid);
+
+  if (showVideosPageMedia) mountResolvedMedia(videosTabPlayer, selectedSrc, mode);
+  else clearMountedMedia(videosTabPlayer);
+}
+
 function getAvailableVideoModeOptions(videos) {
   const sources = getResolvedListingVideoSources(videos);
   const options = [];
@@ -1531,6 +1697,7 @@ function ensureVideoModeMenuHandlers() {
 }
 
 function renderDroneVideos(videos) {
+  currentDroneVideos = Array.isArray(videos) ? videos.slice() : [];
   const sources = getResolvedListingVideoSources(videos);
   const options = getAvailableVideoModeOptions(videos);
   if (!options.length) {
@@ -1538,35 +1705,9 @@ function renderDroneVideos(videos) {
   } else if (!options.some((option) => option.value === activeVideoMode)) {
     activeVideoMode = options[0].value;
   }
+  if (sources.scrub) primeScrubVideoSource(sources.scrub);
   syncVideoModeControls(videos);
-  const selectedSrc = normalizeVideoMode(activeVideoMode) === "drone" ? sources.drone : sources.scrub;
-
-  if (droneGrid) {
-    const media = createVideoMediaElement(selectedSrc, activeVideoMode);
-    if (media) {
-      mountMediaWhenReady(droneGrid, media);
-    } else {
-      droneGrid.innerHTML = "";
-      const empty = document.createElement("div");
-      empty.style.opacity = "0.7";
-      empty.style.fontSize = "13px";
-      empty.textContent = "No video added yet.";
-      droneGrid.appendChild(empty);
-    }
-  }
-
-  if (videosTabPlayer) {
-    const media = createVideoMediaElement(selectedSrc, activeVideoMode);
-    if (media) {
-      mountMediaWhenReady(videosTabPlayer, media);
-    } else {
-      videosTabPlayer.innerHTML = "";
-      const empty = document.createElement("div");
-      empty.className = "videosTabEmpty";
-      empty.textContent = "No video added yet.";
-      videosTabPlayer.appendChild(empty);
-    }
-  }
+  syncRenderedDroneMedia();
 }
 
 function setGalleryMenuOpen(open) {
