@@ -127,6 +127,19 @@ let galleryIndexByNode = new Map();
 let galleryLabelsByNode = new Map();
 let galleryAliasByNode = new Map();
 let listingVideoSources = { scrub: [], drone: [] };
+const GALLERY_DEFERRED_APPLY_MS = 220;
+const GALLERY_THUMB_ROOT_MARGIN = "300px";
+const GALLERY_DEFAULT_IMAGE_WIDTH = 1600;
+const GALLERY_DEFAULT_IMAGE_HEIGHT = 900;
+const galleryRenderCache = new Map();
+const galleryThumbLoadState = new Map();
+const galleryFullLoadState = new Map();
+let galleryThumbObserver = null;
+let galleryDeferredApplyRafId = 0;
+let galleryDeferredApplyTimerId = 0;
+let galleryDeferredApplyRequestId = 0;
+let galleryIdlePrefetchHandle = 0;
+let galleryPreviewState = null;
 
 function syncMobileViewportZoomLock() {
   if (!viewportMeta || typeof window.matchMedia !== "function") return;
@@ -569,8 +582,12 @@ function ensureTourFrameScaleHandlers() {
   });
 }
 
-function getNumericImageOrder(url) {
-  const m = url.match(/\/(\d{3})\.[^/.]+$/i);
+function getNumericImageOrder(value) {
+  const source =
+    typeof value === "string"
+      ? value
+      : value?.full || value?.thumb || value?.medium || value?.src || value?.url || "";
+  const m = String(source || "").match(/\/(\d{3})\.[^/.?]+(?:[?#].*)?$/i);
   return Number(m?.[1] || 999);
 }
 
@@ -725,6 +742,123 @@ function resolveListingAssetUrl(rawUrl) {
   return mediaBaseUrl ? joinUrlParts(mediaBaseUrl, raw) : raw;
 }
 
+function dedupeUrls(values) {
+  const urls = [];
+  const seen = new Set();
+  for (const value of values) {
+    const url = typeof value === "string" ? value.trim() : "";
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    urls.push(url);
+  }
+  return urls;
+}
+
+function deriveSizedGalleryAssetPath(rawPath, sizeSegment) {
+  const raw = typeof rawPath === "string" ? rawPath.trim() : "";
+  const size = typeof sizeSegment === "string" ? sizeSegment.trim().toLowerCase() : "";
+  if (!raw || !size) return "";
+
+  const replaced = raw.replace(/\/(thumb|medium|full)\//i, `/${size}/`);
+  if (replaced !== raw) return replaced;
+
+  const suffixMatch = raw.match(/([?#].*)$/);
+  const suffix = suffixMatch ? suffixMatch[1] : "";
+  const basePath = suffix ? raw.slice(0, -suffix.length) : raw;
+  const slashIndex = basePath.lastIndexOf("/");
+  if (slashIndex === -1) return `${size}/${basePath}${suffix}`;
+  return `${basePath.slice(0, slashIndex)}/${size}/${basePath.slice(slashIndex + 1)}${suffix}`;
+}
+
+function normalizeImageDimensionValue(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function normalizeGalleryAsset(value, index = 0) {
+  const fallbackId = `gallery-asset-${index}`;
+  let rawThumb = "";
+  let rawMedium = "";
+  let rawFull = "";
+  let rawOriginal = "";
+  let width = GALLERY_DEFAULT_IMAGE_WIDTH;
+  let height = GALLERY_DEFAULT_IMAGE_HEIGHT;
+
+  if (typeof value === "string") {
+    rawOriginal = value.trim();
+    rawFull = rawOriginal;
+  } else if (value && typeof value === "object") {
+    rawThumb =
+      typeof value.thumb === "string"
+        ? value.thumb.trim()
+        : typeof value.thumbnail === "string"
+          ? value.thumbnail.trim()
+          : typeof value.small === "string"
+            ? value.small.trim()
+            : "";
+    rawMedium =
+      typeof value.medium === "string"
+        ? value.medium.trim()
+        : typeof value.preview === "string"
+          ? value.preview.trim()
+          : "";
+    rawFull =
+      typeof value.full === "string"
+        ? value.full.trim()
+        : typeof value.original === "string"
+          ? value.original.trim()
+          : typeof value.src === "string"
+            ? value.src.trim()
+            : typeof value.url === "string"
+              ? value.url.trim()
+              : "";
+    rawOriginal = rawFull || rawMedium || rawThumb;
+    width = normalizeImageDimensionValue(value.width, width);
+    height = normalizeImageDimensionValue(value.height, height);
+  }
+
+  const baseSource = rawOriginal || rawFull || rawMedium || rawThumb;
+  const derivedThumb = rawThumb || deriveSizedGalleryAssetPath(baseSource, "thumb");
+  const derivedMedium = rawMedium || deriveSizedGalleryAssetPath(baseSource || rawFull, "medium");
+  const derivedFull = rawFull || deriveSizedGalleryAssetPath(baseSource, "full");
+
+  const thumbCandidates = dedupeUrls(
+    [derivedThumb, deriveSizedGalleryAssetPath(derivedFull || baseSource, "thumb"), baseSource].map(
+      resolveListingAssetUrl
+    )
+  );
+  const mediumCandidates = dedupeUrls(
+    [derivedMedium, deriveSizedGalleryAssetPath(derivedFull || baseSource, "medium"), derivedFull, baseSource].map(
+      resolveListingAssetUrl
+    )
+  );
+  const fullCandidates = dedupeUrls(
+    [
+      derivedFull,
+      deriveSizedGalleryAssetPath(derivedFull || baseSource, "full"),
+      derivedMedium,
+      baseSource,
+      derivedThumb
+    ].map(resolveListingAssetUrl)
+  );
+
+  return {
+    key: fullCandidates[0] || thumbCandidates[0] || fallbackId,
+    thumb: thumbCandidates[0] || fullCandidates[0] || "",
+    medium: mediumCandidates[0] || "",
+    full: fullCandidates[0] || thumbCandidates[0] || "",
+    thumbCandidates,
+    mediumCandidates,
+    fullCandidates,
+    width,
+    height,
+    resolvedThumbUrl: "",
+    resolvedFullUrl: "",
+    thumbLoadPromise: null,
+    fullLoadPromise: null
+  };
+}
+
 function normalizeListingAssetUrls(values, limit = Infinity) {
   if (!Array.isArray(values)) return [];
   const seen = new Set();
@@ -741,12 +875,27 @@ function normalizeListingAssetUrls(values, limit = Infinity) {
   return urls;
 }
 
-function getGalleryUrlsFromEntry(entry) {
+function getGalleryItemsFromEntry(entry) {
   if (!entry || typeof entry !== "object") return [];
-  return normalizeListingAssetUrls(
-    entry.gallery || entry.images || entry.urls || [],
-    4
-  ).sort((a, b) => getNumericImageOrder(a) - getNumericImageOrder(b));
+  const rawItems = Array.isArray(entry.gallery)
+    ? entry.gallery
+    : Array.isArray(entry.images)
+      ? entry.images
+      : Array.isArray(entry.urls)
+        ? entry.urls
+        : [];
+
+  const items = [];
+  const seen = new Set();
+  for (let i = 0; i < rawItems.length; i++) {
+    const asset = normalizeGalleryAsset(rawItems[i], i);
+    if ((!asset.thumb && !asset.full) || seen.has(asset.key)) continue;
+    seen.add(asset.key);
+    items.push(asset);
+    if (items.length >= 4) break;
+  }
+
+  return items.sort((a, b) => getNumericImageOrder(a) - getNumericImageOrder(b));
 }
 
 function getEntryLabel(entry) {
@@ -756,8 +905,8 @@ function getEntryLabel(entry) {
 }
 
 function setGalleryEntry(index, labels, nodeId, entry) {
-  const urls = getGalleryUrlsFromEntry(entry);
-  if (urls.length) index.set(nodeId, urls);
+  const items = getGalleryItemsFromEntry(entry);
+  if (items.length) index.set(nodeId, items);
   const label = getEntryLabel(entry);
   if (label && !labels.has(nodeId)) labels.set(nodeId, label);
 }
@@ -1531,7 +1680,7 @@ function unlockStartupExteriorGallery() {
   galleryStartupLockedToExterior = false;
   if (Number.isFinite(pendingInteriorGalleryNodeId) && pendingInteriorGalleryNodeId >= 0) {
     if (pendingInteriorGalleryNodeId === 0) startupExteriorNodeZeroActivatedAt = Date.now();
-    applyGalleryForNodeId(pendingInteriorGalleryNodeId);
+    applyGalleryForNodeId(pendingInteriorGalleryNodeId, { defer: true });
   }
   if (Number.isFinite(pendingInteriorFloorplanNodeId) && pendingInteriorFloorplanNodeId >= 0) {
     applyFloorplanForNodeId(pendingInteriorFloorplanNodeId);
@@ -1611,7 +1760,7 @@ function renderGalleryMenuItems() {
     item.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
-      applyGalleryForNodeId(room.nodeId);
+      applyGalleryForNodeId(room.nodeId, { defer: false });
       closeGalleryMenu();
     });
     galleryMenu.appendChild(item);
@@ -1661,12 +1810,80 @@ function renderPageGalleryList() {
     if (room.nodeId === currentGallerySourceNodeId) item.classList.add("isActive");
     item.addEventListener("click", (event) => {
       event.preventDefault();
-      applyGalleryForNodeId(room.nodeId);
+      applyGalleryForNodeId(room.nodeId, { defer: false });
     });
     galleryPageList.appendChild(item);
   }
 
   scheduleGalleryPageScrollIndicatorSync();
+}
+
+function getGalleryAssetAlt(label, index) {
+  return `${label} photo ${index + 1}`;
+}
+
+function getGalleryGridLayoutClasses(classPrefix) {
+  return [
+    `${classPrefix}--0`,
+    `${classPrefix}--1`,
+    `${classPrefix}--2`,
+    `${classPrefix}--3`,
+    `${classPrefix}--4`
+  ];
+}
+
+function ensureGalleryRenderCacheEntry(cacheKey, label, items) {
+  let entry = galleryRenderCache.get(cacheKey);
+  if (entry) return entry;
+
+  entry = {
+    key: cacheKey,
+    label,
+    items,
+    sidebarCells: [],
+    pageCells: []
+  };
+
+  const createCells = (cellClass) =>
+    items.map((asset, index) => {
+      const cell = document.createElement("button");
+      cell.type = "button";
+      cell.className = cellClass;
+      cell.setAttribute("aria-label", `Expand ${label} photo ${index + 1}`);
+
+      const img = document.createElement("img");
+      img.alt = getGalleryAssetAlt(label, index);
+      img.loading = "lazy";
+      img.decoding = "async";
+      img.setAttribute("fetchpriority", "low");
+      img.width = asset.width || GALLERY_DEFAULT_IMAGE_WIDTH;
+      img.height = asset.height || GALLERY_DEFAULT_IMAGE_HEIGHT;
+      img.style.aspectRatio = `${img.width} / ${img.height}`;
+      img._galleryAsset = asset;
+      cell.appendChild(img);
+      observeGalleryThumb(img);
+
+      cell.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        openPinnedGalleryPreview(entry, index);
+      });
+
+      return cell;
+    });
+
+  entry.sidebarCells = createCells("galleryCell");
+  entry.pageCells = createCells("pageGalleryGridCell");
+  galleryRenderCache.set(cacheKey, entry);
+  return entry;
+}
+
+function mountGalleryGrid(gridEl, classPrefix, cells) {
+  if (!gridEl) return;
+  const count = Array.isArray(cells) ? cells.length : 0;
+  gridEl.classList.remove(...getGalleryGridLayoutClasses(classPrefix));
+  gridEl.classList.add(`${classPrefix}--${count}`);
+  gridEl.replaceChildren(...(Array.isArray(cells) ? cells : []));
 }
 
 function removeGalleryPreview(force = false) {
@@ -1679,24 +1896,65 @@ function removeGalleryPreview(force = false) {
   galleryPreviewEl.remove();
   galleryPreviewEl = null;
   galleryPreviewPinned = false;
+  galleryPreviewState = null;
 }
 
-function showGalleryPreview(src, altText, opts = {}) {
+function prefetchGalleryPreviewNeighbors(items, activeIndex) {
+  if (!Array.isArray(items) || !items.length) return;
+  requestIdleWork(() => {
+    const prev = items[activeIndex - 1];
+    const next = items[activeIndex + 1];
+    if (prev) warmGalleryAssetFull(prev);
+    if (next) warmGalleryAssetFull(next);
+  }, 600);
+}
+
+function syncGalleryPreviewNav(previewState) {
+  if (!previewState) return;
+  const count = previewState.items.length;
+  const hasMultiple = count > 1;
+  if (previewState.prevBtn) previewState.prevBtn.hidden = !hasMultiple;
+  if (previewState.nextBtn) previewState.nextBtn.hidden = !hasMultiple;
+}
+
+function renderGalleryPreviewSlide(previewState, nextIndex) {
+  if (!previewState || !Array.isArray(previewState.items) || !previewState.items.length) return;
+  const count = previewState.items.length;
+  const index = ((nextIndex % count) + count) % count;
+  const asset = previewState.items[index];
+  if (!asset) return;
+
+  previewState.index = index;
+  previewState.frame.classList.add("isLoading");
+  previewState.image.removeAttribute("src");
+  previewState.image.alt = getGalleryAssetAlt(previewState.label, index);
+  previewState.wrap.dataset.src = asset.full || asset.thumb || asset.key;
+  previewState.wrap.dataset.index = String(index);
+
+  warmGalleryAssetFull(asset).then((url) => {
+    if (!galleryPreviewState || galleryPreviewState !== previewState) return;
+    if (galleryPreviewState.index !== index || !url) return;
+    previewState.image.src = url;
+    previewState.frame.classList.remove("isLoading");
+  });
+
+  prefetchGalleryPreviewNeighbors(previewState.items, index);
+  syncGalleryPreviewNav(previewState);
+}
+
+function showGalleryPreview(cacheEntry, startIndex = 0, opts = {}) {
   const pinned = Boolean(opts.pinned);
-  if (!src) return;
+  if (!cacheEntry || !Array.isArray(cacheEntry.items) || !cacheEntry.items.length) return;
   removeGalleryPreview(true);
 
   const wrap = document.createElement("div");
   wrap.className = "galleryPreview";
   if (pinned) wrap.classList.add("isPinned");
-  wrap.dataset.src = src;
 
   const frame = document.createElement("div");
   frame.className = "galleryPreviewFrame";
 
   const img = document.createElement("img");
-  img.src = src;
-  img.alt = altText || "";
   img.decoding = "async";
 
   if (pinned) {
@@ -1712,10 +1970,52 @@ function showGalleryPreview(src, altText, opts = {}) {
     });
     frame.appendChild(closeBtn);
 
+    const prevBtn = document.createElement("button");
+    prevBtn.type = "button";
+    prevBtn.className = "galleryPreviewNav galleryPreviewNav--prev";
+    prevBtn.setAttribute("aria-label", "Show previous image");
+    prevBtn.textContent = "‹";
+    prevBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!galleryPreviewState) return;
+      renderGalleryPreviewSlide(galleryPreviewState, galleryPreviewState.index - 1);
+    });
+    frame.appendChild(prevBtn);
+
+    const nextBtn = document.createElement("button");
+    nextBtn.type = "button";
+    nextBtn.className = "galleryPreviewNav galleryPreviewNav--next";
+    nextBtn.setAttribute("aria-label", "Show next image");
+    nextBtn.textContent = "›";
+    nextBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!galleryPreviewState) return;
+      renderGalleryPreviewSlide(galleryPreviewState, galleryPreviewState.index + 1);
+    });
+    frame.appendChild(nextBtn);
+
     wrap.addEventListener("click", (event) => {
       event.preventDefault();
       removeGalleryPreview(true);
     });
+
+    frame.addEventListener("click", (event) => {
+      event.stopPropagation();
+    });
+
+    galleryPreviewState = {
+      key: cacheEntry.key,
+      label: cacheEntry.label,
+      items: cacheEntry.items,
+      index: startIndex,
+      wrap,
+      frame,
+      image: img,
+      prevBtn,
+      nextBtn
+    };
   }
 
   frame.appendChild(img);
@@ -1723,21 +2023,13 @@ function showGalleryPreview(src, altText, opts = {}) {
   document.body.appendChild(wrap);
   galleryPreviewEl = wrap;
   galleryPreviewPinned = pinned;
+  if (galleryPreviewState) {
+    renderGalleryPreviewSlide(galleryPreviewState, startIndex);
+  }
 }
 
-function scheduleGalleryPreview(src, altText) {
-  if (galleryPreviewPinned) return;
-  if (!src) return;
-  if (galleryPreviewTimer) clearTimeout(galleryPreviewTimer);
-  galleryPreviewTimer = setTimeout(() => {
-    galleryPreviewTimer = null;
-    if (galleryPreviewPinned) return;
-    showGalleryPreview(src, altText);
-  }, 1000);
-}
-
-function openPinnedGalleryPreview(src, altText) {
-  if (!src) return;
+function openPinnedGalleryPreview(cacheEntry, index = 0) {
+  if (!cacheEntry || !cacheEntry.items?.length) return;
   if (galleryPreviewTimer) {
     clearTimeout(galleryPreviewTimer);
     galleryPreviewTimer = null;
@@ -1745,13 +2037,14 @@ function openPinnedGalleryPreview(src, altText) {
   const isSamePinned =
     galleryPreviewPinned &&
     galleryPreviewEl &&
-    galleryPreviewEl.dataset &&
-    galleryPreviewEl.dataset.src === src;
+    galleryPreviewState &&
+    galleryPreviewState.key === cacheEntry.key &&
+    galleryPreviewState.index === index;
   if (isSamePinned) {
     removeGalleryPreview(true);
     return;
   }
-  showGalleryPreview(src, altText, { pinned: true });
+  showGalleryPreview(cacheEntry, index, { pinned: true });
 }
 
 window.addEventListener("keydown", (event) => {
@@ -1760,6 +2053,16 @@ window.addEventListener("keydown", (event) => {
     closeGalleryMenu();
     closeFloorplanLevelMenu();
     closeVideoModeMenus();
+    return;
+  }
+
+  if (!galleryPreviewState || !galleryPreviewPinned) return;
+  if (event.key === "ArrowLeft") {
+    event.preventDefault();
+    renderGalleryPreviewSlide(galleryPreviewState, galleryPreviewState.index - 1);
+  } else if (event.key === "ArrowRight") {
+    event.preventDefault();
+    renderGalleryPreviewSlide(galleryPreviewState, galleryPreviewState.index + 1);
   }
 });
 
@@ -2544,28 +2847,194 @@ function applyFloorplanForNodeId(nodeId) {
 }
 
 // -----------------------------
-// Image preloading
+// Gallery thumb/full loading
 // -----------------------------
-const _preloaded = new Set();
-
-function preloadImage(url) {
-  if (!url || typeof url !== "string") return;
-  if (_preloaded.has(url)) return;
-  _preloaded.add(url);
-
-  const img = new Image();
-  img.decoding = "async";
-  img.loading = "eager";
-  img.src = url;
-}
-
-function preloadImages(urls) {
-  if (!Array.isArray(urls)) return;
-  for (const u of urls) preloadImage(u);
-}
-
 function getNodeGalleryImages(nodeId) {
   return galleryIndexByNode.get(Number(nodeId)) || [];
+}
+
+function loadGalleryUrlWithState(url, stateMap) {
+  if (!url) return Promise.reject(new Error("Missing gallery asset URL"));
+
+  const existing = stateMap.get(url);
+  if (existing?.status === "loaded") return Promise.resolve(url);
+  if (existing?.status === "loading" && existing.promise) return existing.promise;
+
+  const image = new Image();
+  image.decoding = "async";
+  image.loading = "eager";
+
+  const promise = new Promise((resolve, reject) => {
+    image.onload = () => {
+      stateMap.set(url, { status: "loaded", image, promise: null });
+      resolve(url);
+    };
+    image.onerror = () => {
+      stateMap.set(url, { status: "error", image: null, promise: null });
+      reject(new Error(`Failed to load ${url}`));
+    };
+  });
+
+  stateMap.set(url, { status: "loading", image, promise });
+  image.src = url;
+  return promise;
+}
+
+function loadGalleryAssetCandidates(candidates, stateMap) {
+  const queue = Array.isArray(candidates) ? candidates.filter(Boolean) : [];
+  if (!queue.length) return Promise.reject(new Error("No gallery candidates"));
+
+  let index = 0;
+  const tryNext = () => {
+    if (index >= queue.length) return Promise.reject(new Error("All gallery candidates failed"));
+    const url = queue[index++];
+    return loadGalleryUrlWithState(url, stateMap).catch(() => tryNext());
+  };
+
+  return tryNext();
+}
+
+function warmGalleryAssetThumb(asset) {
+  if (!asset) return Promise.resolve("");
+  if (asset.resolvedThumbUrl) return Promise.resolve(asset.resolvedThumbUrl);
+  for (const url of asset.thumbCandidates) {
+    if (galleryThumbLoadState.get(url)?.status === "loaded") {
+      asset.resolvedThumbUrl = url;
+      return Promise.resolve(url);
+    }
+  }
+  if (asset.thumbLoadPromise) return asset.thumbLoadPromise;
+
+  asset.thumbLoadPromise = loadGalleryAssetCandidates(asset.thumbCandidates, galleryThumbLoadState)
+    .then((url) => {
+      asset.resolvedThumbUrl = url;
+      asset.thumbLoadPromise = null;
+      return url;
+    })
+    .catch(() => {
+      asset.thumbLoadPromise = null;
+      return "";
+    });
+
+  return asset.thumbLoadPromise;
+}
+
+function warmGalleryAssetFull(asset) {
+  if (!asset) return Promise.resolve("");
+  if (asset.resolvedFullUrl) return Promise.resolve(asset.resolvedFullUrl);
+  for (const url of asset.fullCandidates) {
+    if (galleryFullLoadState.get(url)?.status === "loaded") {
+      asset.resolvedFullUrl = url;
+      return Promise.resolve(url);
+    }
+  }
+  if (asset.fullLoadPromise) return asset.fullLoadPromise;
+
+  asset.fullLoadPromise = loadGalleryAssetCandidates(asset.fullCandidates, galleryFullLoadState)
+    .then((url) => {
+      asset.resolvedFullUrl = url;
+      asset.fullLoadPromise = null;
+      return url;
+    })
+    .catch(() => {
+      asset.fullLoadPromise = null;
+      return "";
+    });
+
+  return asset.fullLoadPromise;
+}
+
+function loadThumbIntoElement(imgEl, asset, candidateIndex = 0) {
+  const candidates = asset.resolvedThumbUrl
+    ? [asset.resolvedThumbUrl, ...asset.thumbCandidates.filter((url) => url !== asset.resolvedThumbUrl)]
+    : asset.thumbCandidates;
+  const url = candidates[candidateIndex];
+  if (!url) {
+    imgEl.dataset.galleryThumbHydrated = "error";
+    return;
+  }
+
+  const existing = galleryThumbLoadState.get(url);
+  if (existing?.status === "loaded") {
+    asset.resolvedThumbUrl = url;
+    imgEl.src = url;
+    imgEl.dataset.galleryThumbHydrated = "true";
+    imgEl.classList.add("isLoaded");
+    return;
+  }
+
+  const handleLoad = () => {
+    imgEl.removeEventListener("error", handleError);
+    asset.resolvedThumbUrl = url;
+    galleryThumbLoadState.set(url, { status: "loaded", image: null, promise: null });
+    imgEl.dataset.galleryThumbHydrated = "true";
+    imgEl.classList.add("isLoaded");
+  };
+
+  const handleError = () => {
+    imgEl.removeEventListener("load", handleLoad);
+    galleryThumbLoadState.set(url, { status: "error", image: null, promise: null });
+    loadThumbIntoElement(imgEl, asset, candidateIndex + 1);
+  };
+
+  galleryThumbLoadState.set(url, { status: "loading", image: null, promise: null });
+  imgEl.addEventListener("load", handleLoad, { once: true });
+  imgEl.addEventListener("error", handleError, { once: true });
+  imgEl.src = url;
+}
+
+function hydrateGalleryThumb(imgEl) {
+  if (!(imgEl instanceof HTMLImageElement)) return;
+  if (imgEl.dataset.galleryThumbHydrated === "true") return;
+  const asset = imgEl._galleryAsset;
+  if (!asset) return;
+
+  imgEl.dataset.galleryThumbHydrated = "loading";
+  loadThumbIntoElement(imgEl, asset);
+}
+
+function ensureGalleryThumbObserver() {
+  if (galleryThumbObserver || typeof IntersectionObserver === "undefined") return;
+  galleryThumbObserver = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        const target = entry.target;
+        galleryThumbObserver.unobserve(target);
+        hydrateGalleryThumb(target);
+      }
+    },
+    {
+      rootMargin: GALLERY_THUMB_ROOT_MARGIN,
+      threshold: 0.01
+    }
+  );
+}
+
+function observeGalleryThumb(imgEl) {
+  if (!(imgEl instanceof HTMLImageElement)) return;
+  ensureGalleryThumbObserver();
+  if (!galleryThumbObserver) {
+    hydrateGalleryThumb(imgEl);
+    return;
+  }
+  galleryThumbObserver.observe(imgEl);
+}
+
+function requestIdleWork(callback, timeout = 900) {
+  if (typeof window.requestIdleCallback === "function") {
+    return window.requestIdleCallback(callback, { timeout });
+  }
+  return window.setTimeout(() => callback({ didTimeout: false, timeRemaining: () => 0 }), 240);
+}
+
+function cancelIdleWork(handle) {
+  if (!handle) return;
+  if (typeof window.cancelIdleCallback === "function") {
+    window.cancelIdleCallback(handle);
+    return;
+  }
+  window.clearTimeout(handle);
 }
 
 function hasGalleryPhotosForNode(nodeId) {
@@ -2577,13 +3046,13 @@ function getGalleryAliasNodeId(nodeId) {
   return Number.isFinite(direct) && direct >= 0 ? direct : null;
 }
 
-function applyExteriorGallery() {
+function applyExteriorGallery(opts = {}) {
   if (hasGalleryPhotosForNode(EXTERIOR_GALLERY_NODE_ID)) {
-    applyGalleryForNodeId(EXTERIOR_GALLERY_NODE_ID);
+    applyGalleryForNodeId(EXTERIOR_GALLERY_NODE_ID, opts);
     return true;
   }
   if (hasGalleryPhotosForNode(0)) {
-    applyGalleryForNodeId(0);
+    applyGalleryForNodeId(0, opts);
     return true;
   }
   return false;
@@ -2661,25 +3130,23 @@ function getRoomEntryForNodeId(nodeId) {
   return null;
 }
 
-function preloadNearbyNodes(currentNodeId, ahead = 2, behind = 1) {
+function prefetchNearbyNodeThumbsWhenIdle(currentNodeId, ahead = 1) {
   if (!listing) return;
+  cancelIdleWork(galleryIdlePrefetchHandle);
 
-  const ids = getSortedNodeIds();
-  const cur = Number(currentNodeId);
-  const idx = ids.indexOf(cur);
-  if (idx === -1) return;
+  galleryIdlePrefetchHandle = requestIdleWork(() => {
+    const ids = getSortedNodeIds();
+    const cur = Number(currentNodeId);
+    const idx = ids.indexOf(cur);
+    if (idx === -1) return;
 
-  for (let step = 1; step <= ahead; step++) {
-    const id = ids[idx + step];
-    if (!id) continue;
-    preloadImages(getNodeGalleryImages(id));
-  }
-
-  for (let step = 1; step <= behind; step++) {
-    const id = ids[idx - step];
-    if (!id) continue;
-    preloadImages(getNodeGalleryImages(id));
-  }
+    for (let step = 1; step <= ahead; step++) {
+      const id = ids[idx + step];
+      if (!Number.isFinite(id)) continue;
+      const items = getNodeGalleryImages(id);
+      for (const asset of items) warmGalleryAssetThumb(asset);
+    }
+  });
 }
 
 async function loadListing(listingId) {
@@ -2693,9 +3160,19 @@ async function loadListing(listingId) {
   galleryAliasByNode = runtimeGalleryState.aliases;
   listingVideoSources = buildRuntimeVideoSources(listing);
 
+  cancelDeferredGalleryApply();
+  galleryDeferredApplyRequestId += 1;
+  removeGalleryPreview(true);
+  galleryRenderCache.clear();
+  galleryThumbLoadState.clear();
+  galleryFullLoadState.clear();
+  lastAppliedKey = null;
+  cancelIdleWork(galleryIdlePrefetchHandle);
+  galleryIdlePrefetchHandle = 0;
+
   // Preload both floorplans (if provided) so switching is instant
-  if (listing?.floorplans?.down) preloadImage(resolveListingAssetUrl(listing.floorplans.down));
-  if (listing?.floorplans?.up) preloadImage(resolveListingAssetUrl(listing.floorplans.up));
+  if (listing?.floorplans?.down) prefetchFloorplanSvgMarkup(resolveListingAssetUrl(listing.floorplans.down));
+  if (listing?.floorplans?.up) prefetchFloorplanSvgMarkup(resolveListingAssetUrl(listing.floorplans.up));
   syncFloorplanLevelSelect("down");
 
   propTitle.textContent = listing.title || currentListingId;
@@ -2750,7 +3227,7 @@ async function loadListing(listingId) {
   // Default gallery before the tour/node initializes: exterior set.
   // Floorplan should still initialize immediately to the default first level.
   const initialNodeId = getInitialTourNodeId();
-  const hasExterior = applyExteriorGallery();
+  const hasExterior = applyExteriorGallery({ defer: false });
   tourStartedBySignal = !hasExterior;
   tourInteractionObserved = !hasExterior;
   galleryStartupLockedToExterior = hasExterior;
@@ -2758,7 +3235,7 @@ async function loadListing(listingId) {
   lastPlayerFloorplanNodeId = null;
   pendingInteriorGalleryNodeId = null;
   pendingInteriorFloorplanNodeId = null;
-  if (!hasExterior && initialNodeId) applyGalleryForNodeId(initialNodeId);
+  if (!hasExterior && initialNodeId) applyGalleryForNodeId(initialNodeId, { defer: false });
 
   // Always render an initial floorplan on first load (downstairs/first floor by default),
   // then let node-change messages switch the level as the tour progresses.
@@ -2776,68 +3253,39 @@ async function loadListing(listingId) {
   setTopTab(activeTopTab);
 }
 
-function renderGalleryGrid(gridEl, classPrefix, label, urls) {
-  if (!gridEl) return;
-  const count = urls.length;
-  const cellClass = `${classPrefix}Cell`;
-  const classes = [
-    `${classPrefix}--0`,
-    `${classPrefix}--1`,
-    `${classPrefix}--2`,
-    `${classPrefix}--3`,
-    `${classPrefix}--4`
-  ];
+function renderSidebarGallery(cacheEntry) {
+  if (!gallery || !galleryTitle) return;
+  galleryTitle.textContent = cacheEntry?.label || "Gallery";
+  mountGalleryGrid(gallery, "gallery", cacheEntry?.sidebarCells || []);
+}
 
-  gridEl.replaceChildren();
-  gridEl.classList.remove(...classes);
-  gridEl.classList.add(`${classPrefix}--${count}`);
+function renderFullPageGallery(cacheEntry) {
+  if (!galleryPageGrid) return;
+  mountGalleryGrid(galleryPageGrid, "pageGalleryGrid", cacheEntry?.pageCells || []);
+}
 
-  for (let i = 0; i < urls.length; i++) {
-    const url = urls[i];
-    const cell = document.createElement("button");
-    cell.type = "button";
-    cell.className = cellClass;
-    cell.setAttribute("aria-label", `Expand ${label} photo ${i + 1}`);
-    const img = document.createElement("img");
-    img.src = url;
-    img.loading = i === 0 ? "eager" : "lazy";
-    img.decoding = "async";
-    img.alt = `${label} photo ${i + 1}`;
-    cell.appendChild(img);
-    cell.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      openPinnedGalleryPreview(url, img.alt);
-    });
-    gridEl.appendChild(cell);
+function cancelDeferredGalleryApply() {
+  if (galleryDeferredApplyRafId) {
+    cancelAnimationFrame(galleryDeferredApplyRafId);
+    galleryDeferredApplyRafId = 0;
+  }
+  if (galleryDeferredApplyTimerId) {
+    clearTimeout(galleryDeferredApplyTimerId);
+    galleryDeferredApplyTimerId = 0;
   }
 }
 
-function renderSidebarGallery(label, urls) {
-  if (!gallery || !galleryTitle) return;
-  galleryTitle.textContent = label;
-  renderGalleryGrid(gallery, "gallery", label, urls);
-}
-
-function renderFullPageGallery(label, urls) {
-  if (!galleryPageGrid) return;
-  renderGalleryGrid(galleryPageGrid, "pageGalleryGrid", label, urls);
-}
-
-function applyGalleryForNodeId(nodeId) {
+function commitGalleryForNodeId(nodeId) {
   if (!listing) return;
 
   const fallback = findGalleryFallbackForNode(nodeId);
   const sourceNodeId = fallback.sourceNodeId;
-  const sourceImages = fallback.urls;
+  const sourceItems = fallback.urls;
   const currentRoom = getRoomEntryForNodeId(nodeId);
   const sourceRoom = getRoomEntryForNodeId(sourceNodeId);
   const entry = sourceRoom?.entry || currentRoom?.entry || null;
   const resolvedKey = `galleryNode:${sourceNodeId}`;
   currentGallerySourceNodeId = sourceNodeId;
-
-  // Preload current room images immediately
-  preloadImages(sourceImages);
 
   const label = getGalleryLabelForNodeId(sourceNodeId || nodeId, entry);
   renderGalleryMenuItems();
@@ -2847,17 +3295,38 @@ function applyGalleryForNodeId(nodeId) {
   if (resolvedKey === lastAppliedKey) return;
   lastAppliedKey = resolvedKey;
 
-  const urls = sourceImages.filter((u) => typeof u === "string" && u.trim()).slice(0, 4);
-  removeGalleryPreview();
-  renderSidebarGallery(label, urls);
-  renderFullPageGallery(label, urls);
+  const items = Array.isArray(sourceItems) ? sourceItems.slice(0, 4) : [];
+  const cacheEntry = ensureGalleryRenderCacheEntry(resolvedKey, label, items);
+  removeGalleryPreview(true);
+  renderSidebarGallery(cacheEntry);
+  renderFullPageGallery(cacheEntry);
+  prefetchNearbyNodeThumbsWhenIdle(Number(nodeId), 1);
+}
 
-  preloadNearbyNodes(Number(nodeId), 2, 1);
+function applyGalleryForNodeId(nodeId, opts = {}) {
+  if (!listing) return;
+  const shouldDefer = Boolean(opts.defer);
+  if (!shouldDefer) {
+    cancelDeferredGalleryApply();
+    commitGalleryForNodeId(nodeId);
+    return;
+  }
+
+  const requestId = ++galleryDeferredApplyRequestId;
+  cancelDeferredGalleryApply();
+  galleryDeferredApplyRafId = requestAnimationFrame(() => {
+    galleryDeferredApplyRafId = 0;
+    galleryDeferredApplyTimerId = window.setTimeout(() => {
+      galleryDeferredApplyTimerId = 0;
+      if (requestId !== galleryDeferredApplyRequestId) return;
+      commitGalleryForNodeId(nodeId);
+    }, GALLERY_DEFERRED_APPLY_MS);
+  });
 }
 
 // Back-compat wrapper (older codepaths may still call this)
 function applyGalleryById(roomId) {
-  applyGalleryForNodeId(Number(roomId));
+  applyGalleryForNodeId(Number(roomId), { defer: false });
 }
 
 // 3) Listen for messages from the player iframe
@@ -2974,7 +3443,9 @@ window.addEventListener("message", (event) => {
       return;
     }
 
-    if (Number.isFinite(galleryNodeId) && galleryNodeId >= 0) applyGalleryForNodeId(galleryNodeId);
+    if (Number.isFinite(galleryNodeId) && galleryNodeId >= 0) {
+      applyGalleryForNodeId(galleryNodeId, { defer: true });
+    }
     if (Number.isFinite(floorplanNodeId) && floorplanNodeId >= 0) {
       applyFloorplanForNodeId(floorplanNodeId);
     }
@@ -2987,7 +3458,7 @@ window.addEventListener("message", (event) => {
     playerViewMode = mode;
 
     if (mode === "dollhouse") {
-      applyExteriorGallery();
+      applyExteriorGallery({ defer: true });
       return;
     }
 
@@ -3015,7 +3486,7 @@ window.addEventListener("message", (event) => {
         unlockStartupExteriorGallery();
       } else {
         if (Number.isFinite(lastPlayerGalleryNodeId) && lastPlayerGalleryNodeId >= 0) {
-          applyGalleryForNodeId(lastPlayerGalleryNodeId);
+          applyGalleryForNodeId(lastPlayerGalleryNodeId, { defer: true });
         }
         if (Number.isFinite(lastPlayerFloorplanNodeId) && lastPlayerFloorplanNodeId >= 0) {
           applyFloorplanForNodeId(lastPlayerFloorplanNodeId);

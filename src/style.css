@@ -2131,6 +2131,12 @@ object.floorplanSvg,
   height: 100%;
   object-fit: cover;
   display: block;
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+
+.galleryCell img.isLoaded {
+  opacity: 1;
 }
 
 .pageGalleryGrid {
@@ -2179,6 +2185,12 @@ object.floorplanSvg,
   max-height: 100%;
   object-fit: contain;
   display: block;
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+
+.pageGalleryGridCell img.isLoaded {
+  opacity: 1;
 }
 
 .pageGalleryGrid:not(.pageGalleryGrid--2) .pageGalleryGridCell:hover {
@@ -2201,9 +2213,20 @@ object.floorplanSvg,
 
 .galleryPreviewFrame {
   position: relative;
-  display: inline-block;
+  display: grid;
+  place-items: center;
   max-width: 92vw;
   max-height: 92vh;
+  min-width: min(320px, 92vw);
+  min-height: min(240px, 60vh);
+}
+
+.galleryPreviewFrame.isLoading::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 14px;
+  background: rgba(10, 12, 20, 0.18);
 }
 
 .galleryPreview.isPinned {
@@ -2229,6 +2252,38 @@ object.floorplanSvg,
     0 28px 84px rgba(0, 0, 0, 0.62),
     0 12px 24px rgba(0, 0, 0, 0.48);
   transform: scale(1.04);
+}
+
+.galleryPreviewNav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  font-size: 28px;
+  line-height: 1;
+  color: #2e1a47;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+  z-index: 2;
+}
+
+.galleryPreviewNav--prev {
+  left: 10px;
+}
+
+.galleryPreviewNav--next {
+  right: 10px;
+}
+
+.galleryPreviewNav:hover {
+  background: #ffffff;
 }
 
 .galleryPreviewClose {
