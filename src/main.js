@@ -1784,6 +1784,7 @@ let floorplanInitRafId = 0;
 let floorplanInitAttemptsRemaining = 0;
 let floorplanTouchScrollLock = false;
 let floorplanLoadRequestId = 0;
+const floorplanMarkupCache = new Map();
 
 setFpEnabled(false);
 
@@ -1882,6 +1883,7 @@ function setFpEnabled(enabled) {
     fpState.isPanning = false;
     fpState.isPinching = false;
     fpState.activeTouchPoints.clear();
+    fpState.svgEl = null;
     setFloorplanTouchScrollLock(false);
   }
   if (floorplanViewport) {
@@ -2119,6 +2121,23 @@ function parseFloorplanSvgMarkup(markup) {
   return doc.querySelector("svg");
 }
 
+async function fetchFloorplanSvgMarkup(url) {
+  if (!url) return "";
+  if (floorplanMarkupCache.has(url)) return floorplanMarkupCache.get(url);
+
+  const res = await fetch(url, { cache: "no-store", mode: "cors" });
+  if (!res.ok) throw new Error(`Failed to load floorplan: ${res.status}`);
+
+  const markup = await res.text();
+  floorplanMarkupCache.set(url, markup);
+  return markup;
+}
+
+function prefetchFloorplanSvgMarkup(url) {
+  if (!url || floorplanMarkupCache.has(url)) return;
+  fetchFloorplanSvgMarkup(url).catch(() => {});
+}
+
 function mountInlineFloorplanSvg(svgSourceEl) {
   if (!floorplan || !svgSourceEl) return null;
   const mounted = document.importNode(svgSourceEl, true);
@@ -2204,9 +2223,9 @@ function initFloorplanPanZoomFromObject() {
   floorplanContent.style.height = "100%";
   floorplanContent.style.transform = "none";
 
-  setFpEnabled(true);
   const fitApplied = resetFpToFit();
   if (!fitApplied) {
+    setFpEnabled(false);
     // Keep a valid viewBox even before first measurable layout; a later refit will snap to bounds.
     fpState.minZoom = 1;
     fpState.maxZoom = 6.5;
@@ -2217,8 +2236,10 @@ function initFloorplanPanZoomFromObject() {
     fpState.viewBoxH = fpState.sourceH;
     applyFpViewBox();
     syncFpSlider();
+    return false;
   }
 
+  setFpEnabled(true);
   requestAnimationFrame(() => refitFloorplanAfterResize());
   return true;
 }
@@ -2472,6 +2493,7 @@ function applyFloorplanForLevel(level) {
     return;
   }
 
+  cancelScheduledFloorplanInitRetry();
   setFpEnabled(false);
   floorplan.dataset.src = url;
   floorplan.setAttribute("aria-busy", "true");
@@ -2479,11 +2501,7 @@ function applyFloorplanForLevel(level) {
 
   const requestId = ++floorplanLoadRequestId;
 
-  fetch(url, { cache: "force-cache", mode: "cors" })
-    .then((res) => {
-      if (!res.ok) throw new Error(`Failed to load floorplan: ${res.status}`);
-      return res.text();
-    })
+  fetchFloorplanSvgMarkup(url)
     .then((markup) => {
       if (requestId !== floorplanLoadRequestId) return;
       const parsedSvg = parseFloorplanSvgMarkup(markup);
@@ -2491,12 +2509,12 @@ function applyFloorplanForLevel(level) {
       mountInlineFloorplanSvg(parsedSvg);
       floorplan.removeAttribute("aria-busy");
       scheduleFloorplanInitRetry(90);
-      preloadImage(url);
     })
     .catch((error) => {
       if (requestId !== floorplanLoadRequestId) return;
       console.error("[listing] Failed to initialize floorplan SVG", error);
       floorplan.removeAttribute("aria-busy");
+      floorplanMarkupCache.delete(url);
       setFloorplanFallbackImage(url);
       setFpEnabled(false);
     });
