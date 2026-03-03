@@ -1,5 +1,9 @@
 {
   "id": "prod_demo_house_01",
+  "slug": "123-demo-st",
+  "hostnames": [
+    "123-demo-st.listings.rtfmediasolutions.com"
+  ],
   "title": "123 Demo St",
   "addressLine": "North Hollywood, CA, 91602",
   "summary": "4 bedroom, 3 bathroom family home with generous living spaces.",

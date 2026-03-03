@@ -104,8 +104,10 @@ if (!sidebarEl) console.error("[listing] Missing required element #sidebar");
 // 1) Determine which listing to load from URL
 // e.g. listing.rtfmediasolutions.com/?id=prod_demo_house_01
 const params = new URLSearchParams(location.search);
-const listingId = params.get("id") || "prod_demo_house_01";
+const DEFAULT_LISTING_ID = "prod_demo_house_01";
 const EXTERIOR_GALLERY_NODE_ID = 100;
+let currentListingId = DEFAULT_LISTING_ID;
+let listingManifest = null;
 
 // -----------------------------
 // Sidebar tab switching (no user scrolling)
@@ -562,6 +564,125 @@ function formatGalleryFolderLabel(folderName) {
     .replace(/\s+/g, " ")
     .trim()
     .replace(/\b[a-z]/g, (c) => c.toUpperCase());
+}
+
+function normalizeLookupValue(value) {
+  return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+
+function getNormalizedHostname() {
+  return normalizeLookupValue(window.location.hostname);
+}
+
+function isDevelopmentHostname(hostname) {
+  const normalized = normalizeLookupValue(hostname);
+  return (
+    !normalized ||
+    normalized === "localhost" ||
+    normalized === "127.0.0.1" ||
+    normalized === "0.0.0.0" ||
+    normalized.endsWith(".localhost")
+  );
+}
+
+async function loadListingManifest() {
+  if (listingManifest) return listingManifest;
+
+  try {
+    const res = await fetch("/listings/index.json", { cache: "no-store" });
+    if (!res.ok) return null;
+    const data = await res.json();
+    listingManifest = data && typeof data === "object" ? data : null;
+  } catch {
+    listingManifest = null;
+  }
+
+  return listingManifest;
+}
+
+function getManifestListings(manifest) {
+  return Array.isArray(manifest?.listings) ? manifest.listings : [];
+}
+
+function getListingEntryById(manifest, listingId) {
+  const targetId = normalizeLookupValue(listingId);
+  if (!targetId) return null;
+  return (
+    getManifestListings(manifest).find((entry) => normalizeLookupValue(entry?.id) === targetId) || null
+  );
+}
+
+function getListingEntryBySlug(manifest, slug) {
+  const targetSlug = normalizeLookupValue(slug);
+  if (!targetSlug) return null;
+  return (
+    getManifestListings(manifest).find(
+      (entry) => normalizeLookupValue(entry?.slug) === targetSlug
+    ) || null
+  );
+}
+
+function getListingEntryByHostname(manifest, hostname) {
+  const targetHost = normalizeLookupValue(hostname);
+  if (!targetHost) return null;
+  return (
+    getManifestListings(manifest).find((entry) =>
+      (Array.isArray(entry?.hostnames) ? entry.hostnames : []).some(
+        (candidate) => normalizeLookupValue(candidate) === targetHost
+      )
+    ) || null
+  );
+}
+
+function getManifestDomainSuffixes(manifest) {
+  return (Array.isArray(manifest?.domainSuffixes) ? manifest.domainSuffixes : [])
+    .map((value) => normalizeLookupValue(value))
+    .filter(Boolean);
+}
+
+function getSlugFromHostname(manifest, hostname) {
+  const normalizedHost = normalizeLookupValue(hostname);
+  if (!normalizedHost || isDevelopmentHostname(normalizedHost) || normalizedHost.endsWith(".pages.dev")) {
+    return "";
+  }
+
+  const exactEntry = getListingEntryByHostname(manifest, normalizedHost);
+  if (exactEntry?.slug) return normalizeLookupValue(exactEntry.slug);
+
+  for (const suffix of getManifestDomainSuffixes(manifest)) {
+    const needle = `.${suffix}`;
+    if (!normalizedHost.endsWith(needle)) continue;
+    const prefix = normalizedHost.slice(0, -needle.length);
+    return normalizeLookupValue(prefix);
+  }
+
+  return "";
+}
+
+async function resolveCurrentListingId() {
+  const explicitId = normalizeLookupValue(params.get("id"));
+  if (explicitId) return explicitId;
+
+  const manifest = await loadListingManifest();
+
+  const explicitSlug = normalizeLookupValue(params.get("slug"));
+  if (explicitSlug) {
+    const bySlug = getListingEntryBySlug(manifest, explicitSlug);
+    if (bySlug?.id) return bySlug.id;
+  }
+
+  const hostname = getNormalizedHostname();
+  const byHostname = getListingEntryByHostname(manifest, hostname);
+  if (byHostname?.id) return byHostname.id;
+
+  const slug = getSlugFromHostname(manifest, hostname);
+  if (slug) {
+    const bySlug = getListingEntryBySlug(manifest, slug);
+    if (bySlug?.id) return bySlug.id;
+  }
+
+  const defaultId = normalizeLookupValue(manifest?.defaultListingId);
+  return defaultId || DEFAULT_LISTING_ID;
 }
 
 function isAbsoluteUrl(url) {
@@ -2499,9 +2620,10 @@ function preloadNearbyNodes(currentNodeId, ahead = 2, behind = 1) {
   }
 }
 
-async function loadListing() {
-  const res = await fetch(`/listings/${listingId}.json`, { cache: "no-store" });
-  if (!res.ok) throw new Error(`Listing not found: ${listingId}`);
+async function loadListing(listingId) {
+  currentListingId = normalizeLookupValue(listingId) || DEFAULT_LISTING_ID;
+  const res = await fetch(`/listings/${currentListingId}.json`, { cache: "no-store" });
+  if (!res.ok) throw new Error(`Listing not found: ${currentListingId}`);
   listing = await res.json();
   const runtimeGalleryState = buildRuntimeGalleryState(listing);
   galleryIndexByNode = runtimeGalleryState.index;
@@ -2514,8 +2636,8 @@ async function loadListing() {
   if (listing?.floorplans?.up) preloadImage(resolveListingAssetUrl(listing.floorplans.up));
   syncFloorplanLevelSelect("down");
 
-  propTitle.textContent = listing.title || listingId;
-  if (infoPropTitle) infoPropTitle.textContent = listing.title || listingId;
+  propTitle.textContent = listing.title || currentListingId;
+  if (infoPropTitle) infoPropTitle.textContent = listing.title || currentListingId;
 
   if (propAddress) {
     propAddress.textContent = listing.addressLine || "";
@@ -2841,21 +2963,23 @@ window.addEventListener("message", (event) => {
   }
 });
 
-loadListing().catch((e) => {
-  console.error(e);
-  propTitle.textContent = "Failed to load listing";
-  if (infoPropTitle) infoPropTitle.textContent = "Failed to load listing";
-  if (propAddress) propAddress.textContent = "";
-  if (infoAddress) infoAddress.textContent = "";
-  if (propSummary) propSummary.textContent = String(e?.message || e);
-  if (infoPropSummary) infoPropSummary.textContent = String(e?.message || e);
-  if (propHoverBlurb) propHoverBlurb.innerHTML = "";
-  if (infoBlurbContent) infoBlurbContent.innerHTML = "";
+resolveCurrentListingId()
+  .then((listingId) => loadListing(listingId))
+  .catch((e) => {
+    console.error(e);
+    propTitle.textContent = "Failed to load listing";
+    if (infoPropTitle) infoPropTitle.textContent = "Failed to load listing";
+    if (propAddress) propAddress.textContent = "";
+    if (infoAddress) infoAddress.textContent = "";
+    if (propSummary) propSummary.textContent = String(e?.message || e);
+    if (infoPropSummary) infoPropSummary.textContent = String(e?.message || e);
+    if (propHoverBlurb) propHoverBlurb.innerHTML = "";
+    if (infoBlurbContent) infoBlurbContent.innerHTML = "";
 
-  if (bedsVal) bedsVal.textContent = "–";
-  if (bathsVal) bathsVal.textContent = "–";
-  if (sqftVal) sqftVal.textContent = "–";
-  if (infoBedsVal) infoBedsVal.textContent = "–";
-  if (infoBathsVal) infoBathsVal.textContent = "–";
-  if (infoSqftVal) infoSqftVal.textContent = "–";
-});
+    if (bedsVal) bedsVal.textContent = "–";
+    if (bathsVal) bathsVal.textContent = "–";
+    if (sqftVal) sqftVal.textContent = "–";
+    if (infoBedsVal) infoBedsVal.textContent = "–";
+    if (infoBathsVal) infoBathsVal.textContent = "–";
+    if (infoSqftVal) infoSqftVal.textContent = "–";
+  });

@@ -1,0 +1,15 @@
+{
+  "defaultListingId": "prod_demo_house_01",
+  "domainSuffixes": [
+    "listings.rtfmediasolutions.com"
+  ],
+  "listings": [
+    {
+      "id": "prod_demo_house_01",
+      "slug": "123-demo-st",
+      "hostnames": [
+        "123-demo-st.listings.rtfmediasolutions.com"
+      ]
+    }
+  ]
+}
