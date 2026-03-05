@@ -70,8 +70,8 @@ const floorplanZoomIn = document.getElementById("floorplanZoomIn");
 const floorplanZoomOut = document.getElementById("floorplanZoomOut");
 const floorplanZoomValue = document.getElementById("floorplanZoomValue");
 
-// Property stats (Beds / Baths / Sq Ft)
-// Support both legacy IDs (bedsVal/bathsVal/sqftVal) and newer IDs (statBeds/statBaths/statSqft)
+// Property stats (Beds / Baths / Sq Ft / Acres)
+// Support both legacy IDs and newer stat IDs.
 const getAny = (...ids) => {
   for (const id of ids) {
     const el = document.getElementById(id);
@@ -83,10 +83,12 @@ const getAny = (...ids) => {
 const bedsVal = getAny("bedsVal", "statBeds");
 const bathsVal = getAny("bathsVal", "statBaths");
 const sqftVal = getAny("sqftVal", "statSqft");
+const acresVal = getAny("acresVal", "statAcres");
 const infoAddress = document.getElementById("infoPropSubAddress");
 const infoBedsVal = document.getElementById("infoStatBeds");
 const infoBathsVal = document.getElementById("infoStatBaths");
 const infoSqftVal = document.getElementById("infoStatSqft");
+const infoAcresVal = document.getElementById("infoStatAcres");
 
 // Sidebar "tab" controls (main <-> drone)
 const sidebarEl = document.getElementById("sidebar");
@@ -3885,6 +3887,17 @@ function prefetchNearbyNodeThumbsWhenIdle(currentNodeId, ahead = 1) {
   });
 }
 
+function formatAcresValue(rawAcres, rawDisplayValue) {
+  const displayOverride = typeof rawDisplayValue === "string" ? rawDisplayValue.trim() : "";
+  if (displayOverride) return displayOverride;
+  const acres = Number(rawAcres);
+  if (!Number.isFinite(acres)) return "–";
+  if (Math.abs(acres - 0.75) <= 0.0001) return "3/4";
+  if (Math.abs(acres - 0.5) <= 0.0001) return "1/2";
+  if (Math.abs(acres - 0.25) <= 0.0001) return "1/4";
+  return acres.toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
 async function loadListing(listingId) {
   currentListingId = normalizeLookupValue(listingId) || DEFAULT_LISTING_ID;
   const res = await fetch(`/listings/${currentListingId}.json`, { cache: "no-store" });
@@ -3920,17 +3933,20 @@ async function loadListing(listingId) {
   }
   if (infoAddress) infoAddress.textContent = listing.addressLine || "";
 
-  // Stats (data-driven): "beds", "baths", "sqft"
+  // Stats (data-driven): "beds", "baths", "sqft", "acres"
   const beds = Number(listing?.beds);
   const baths = Number(listing?.baths);
   const sqft = Number(listing?.sqft);
+  const acresText = formatAcresValue(listing?.acres, listing?.acresDisplay);
 
   if (bedsVal) bedsVal.textContent = Number.isFinite(beds) ? String(beds) : "–";
   if (bathsVal) bathsVal.textContent = Number.isFinite(baths) ? String(baths) : "–";
   if (sqftVal) sqftVal.textContent = Number.isFinite(sqft) ? sqft.toLocaleString() : "–";
+  if (acresVal) acresVal.textContent = acresText;
   if (infoBedsVal) infoBedsVal.textContent = Number.isFinite(beds) ? String(beds) : "–";
   if (infoBathsVal) infoBathsVal.textContent = Number.isFinite(baths) ? String(baths) : "–";
   if (infoSqftVal) infoSqftVal.textContent = Number.isFinite(sqft) ? sqft.toLocaleString() : "–";
+  if (infoAcresVal) infoAcresVal.textContent = acresText;
 
   // Summary (marketing blurb)
   if (propSummary) propSummary.textContent = (listing.summary || "").toString();
@@ -4249,7 +4265,9 @@ resolveCurrentListingId()
     if (bedsVal) bedsVal.textContent = "–";
     if (bathsVal) bathsVal.textContent = "–";
     if (sqftVal) sqftVal.textContent = "–";
+    if (acresVal) acresVal.textContent = "–";
     if (infoBedsVal) infoBedsVal.textContent = "–";
     if (infoBathsVal) infoBathsVal.textContent = "–";
     if (infoSqftVal) infoSqftVal.textContent = "–";
+    if (infoAcresVal) infoAcresVal.textContent = "–";
   });

@@ -19,6 +19,8 @@
   "beds": 4,
   "baths": 3,
   "sqft": 2600,
+  "acres": 0.75,
+  "acresDisplay": "3/4",
   "tourUrl": "https://realtour.rtfmediasolutions.com/?tour=prod_demo_house_01",
   "nodeToRoomKey": {
     "1": "living_room",
