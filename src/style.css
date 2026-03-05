@@ -1782,7 +1782,7 @@ body.isFloorplanView {
     linear-gradient(#2e1a47, #2e1a47) padding-box,
     var(--chrome-stroke-material) border-box;
   border: var(--title-inner-stroke-width) solid transparent;
-  padding: clamp(9px, 2.2cqi, 12px) clamp(6px, 1.3cqi, 8px);
+  padding: clamp(6px, 1.5cqi, 8px) clamp(6px, 1.3cqi, 8px);
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -1821,7 +1821,7 @@ body.isFloorplanView {
 }
 
 .statValue {
-  font-size: clamp(16.5px, 4.9cqi, 24px);
+  font-size: clamp(18px, 5.4cqi, 26px);
   font-weight: 700;
   line-height: 1;
   color: #ffffff;
@@ -1842,7 +1842,7 @@ body.isFloorplanView {
 }
 
 .stat:has(#statSqft) .statValue {
-  font-size: clamp(13px, 4.2cqi, 21px);
+  font-size: clamp(14px, 4.6cqi, 23px);
 }
 
 .stat:has(#statSqft) .statLabel {
@@ -1850,7 +1850,7 @@ body.isFloorplanView {
 }
 
 .stat:has(#statAcres) .statValue {
-  font-size: clamp(13px, 4.2cqi, 21px);
+  font-size: clamp(14px, 4.6cqi, 23px);
 }
 
 .stat:has(#statAcres) .statLabel {
