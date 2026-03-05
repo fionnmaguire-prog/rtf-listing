@@ -1303,7 +1303,7 @@ body.isFloorplanView {
 .infoStatValue {
   order: 2;
   justify-self: center;
-  font-size: 28px;
+  font-size: 26px;
   font-weight: 700;
   line-height: 1;
   color: #ffffff;
@@ -1314,10 +1314,11 @@ body.isFloorplanView {
 
 .infoStatLabel {
   order: 1;
-  font-size: 24px;
+  font-size: 25px;
   font-weight: 700;
   opacity: 1;
   line-height: 1;
+  text-transform: uppercase;
   color: #ffffff;
   -webkit-text-fill-color: #ffffff;
   text-align: left;
@@ -1803,7 +1804,7 @@ body.isFloorplanView {
 .statValue {
   grid-column: 2;
   justify-self: center;
-  font-size: clamp(16px, 4.8cqi, 24px);
+  font-size: clamp(15px, 4.4cqi, 22px);
   font-weight: 700;
   line-height: 1;
   color: #ffffff;
@@ -1814,9 +1815,10 @@ body.isFloorplanView {
 .statLabel {
   grid-column: 3;
   justify-self: end;
-  font-size: clamp(7px, 2cqi, 10px);
+  font-size: clamp(8px, 2.2cqi, 11px);
   opacity: 1;
   line-height: 1.1;
+  text-transform: uppercase;
   color: #ffffff;
   text-align: right;
   min-width: 0;
@@ -1824,19 +1826,19 @@ body.isFloorplanView {
 }
 
 .stat:has(#statSqft) .statValue {
-  font-size: clamp(13px, 4.3cqi, 22px);
+  font-size: clamp(12px, 3.9cqi, 20px);
 }
 
 .stat:has(#statSqft) .statLabel {
-  font-size: clamp(6px, 1.8cqi, 9px);
+  font-size: clamp(7px, 1.9cqi, 10px);
 }
 
 .stat:has(#statAcres) .statValue {
-  font-size: clamp(13px, 4.3cqi, 22px);
+  font-size: clamp(12px, 3.9cqi, 20px);
 }
 
 .stat:has(#statAcres) .statLabel {
-  font-size: clamp(6px, 1.8cqi, 9px);
+  font-size: clamp(7px, 1.9cqi, 10px);
 }
 
 #propSummary {
