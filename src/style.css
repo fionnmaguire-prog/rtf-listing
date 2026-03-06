@@ -1782,12 +1782,12 @@ body.isFloorplanView {
     linear-gradient(#2e1a47, #2e1a47) padding-box,
     var(--chrome-stroke-material) border-box;
   border: var(--title-inner-stroke-width) solid transparent;
-  padding: clamp(6px, 1.5cqi, 8px) clamp(6px, 1.3cqi, 8px) clamp(3px, 0.9cqi, 5px);
+  padding: clamp(7px, 1.7cqi, 9px) clamp(6px, 1.3cqi, 8px) clamp(3px, 0.9cqi, 5px);
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  row-gap: clamp(4px, 1cqi, 6px);
+  row-gap: clamp(3px, 0.8cqi, 5px);
   min-width: 0;
   min-height: clamp(66px, 11cqi, 84px);
   overflow: hidden;
@@ -1839,14 +1839,6 @@ body.isFloorplanView {
   text-align: center;
   min-width: 0;
   white-space: nowrap;
-}
-
-.stat:has(#statAcres) .statValue {
-  font-size: clamp(14px, 4.6cqi, 23px);
-}
-
-.stat:has(#statAcres) .statLabel {
-  font-size: clamp(8px, 2.1cqi, 11px);
 }
 
 #propSummary {
